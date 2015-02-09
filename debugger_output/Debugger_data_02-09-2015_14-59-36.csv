@@ -1,0 +1,2 @@
+ping_time,left_ir_time,prev_ir_left,right_ir_time,prev_ir_right,initial_orient_robot,x_robot,y_robot,orient_robot,next_ball_column,millis(),hoppers[0].x,hoppers[0].y,hoppers[0].balls,hoppers[0].orient,hoppers[1].x,hoppers[1].y,hoppers[1].balls,hoppers[1].orient,hoppers[2].x,hoppers[2].y,hoppers[2].balls,hoppers[2].orient,hoppers[3].x,hoppers[3].y,hoppers[3].balls,hoppers[3].orient0¬0
+0,0,0,15,0,0.00,0.10,0.00,0.00,0,20,0,0,0,00,0,4,28,8,4,3,1,0,0,0,1,0,0
