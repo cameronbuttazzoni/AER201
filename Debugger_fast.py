@@ -52,7 +52,7 @@ disp_vals = [] #If show_all_vals is false, show vals in this list
 #Choose which serial values to plot
 #Basic format (assumes 4 hoppers):
 
-#0  ping_time, left_ir_time, prev_ir_left, right_ir_time, prev_ir_right,
+#0  ping_time, left_ir_time, prev_ir_left,  prev_ir_right, robot_direction,
 #5  initial_orient_robot, x_robot, y_robot, orient_robot, next_ball_column,
 #10 millis(), hoppers[0].x, hoppers[0].y, hoppers[0].balls, hoppers[0].orient,
 #15 hoppers[1].x, hoppers[1].y, hoppers[1].balls, hoppers[1].orient,

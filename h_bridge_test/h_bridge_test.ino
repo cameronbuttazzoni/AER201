@@ -24,23 +24,31 @@ void setup_pins(){
   pinMode(LEFT_BACKWARD_PIN, OUTPUT);
 }
 
-void loop(){
-  //First
+void drive_forward(){
   digitalWrite(RIGHT_WHEEL_ENABLE_PIN, HIGH);
   digitalWrite(LEFT_WHEEL_ENABLE_PIN, HIGH);
+  //analogWrite(LEFT_WHEEL_ENABLE_PIN, 100);
   digitalWrite(LEFT_BACKWARD_PIN, LOW);
   digitalWrite(LEFT_FORWARD_PIN, HIGH);
   digitalWrite(RIGHT_BACKWARD_PIN, LOW);
   digitalWrite(RIGHT_FORWARD_PIN, HIGH);
-  delay(2000);
-  //Second
+}
+
+void drive_left(){
   digitalWrite(RIGHT_WHEEL_ENABLE_PIN, HIGH);
   digitalWrite(LEFT_WHEEL_ENABLE_PIN, HIGH);
   digitalWrite(LEFT_BACKWARD_PIN, HIGH);
   digitalWrite(LEFT_FORWARD_PIN, LOW);
   digitalWrite(RIGHT_BACKWARD_PIN, HIGH);
   digitalWrite(RIGHT_FORWARD_PIN, LOW);
+}
+
+void loop(){
+  //First
+  drive_forward();
   delay(2000);
+  //Second
+  /*
   //Third
   digitalWrite(RIGHT_WHEEL_ENABLE_PIN, HIGH);
   digitalWrite(LEFT_WHEEL_ENABLE_PIN, HIGH);
@@ -56,5 +64,5 @@ void loop(){
   digitalWrite(LEFT_FORWARD_PIN, HIGH);
   digitalWrite(RIGHT_BACKWARD_PIN, HIGH);
   digitalWrite(RIGHT_FORWARD_PIN, LOW);
-  delay(2000);
+  delay(2000);*/
 }

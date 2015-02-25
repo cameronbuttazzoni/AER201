@@ -12,11 +12,18 @@ Version Control:
                 - Implemented hopper detection algorithm
             1.3:
                 - Fixed hopper detection algroithm to require many readings in a row before accepting a value (to overcome sonar inaccuracies)
+            1.4:
+                - Created function templates for the main program and the 8 tasks needed for progress evaluation 2
+                - Started writing function for encoder to know robot orientation and direction
+            1.5:
+                - Finished wheel IR forward/backward/turning function (not tested)
+                - Started adding black/white sensor for line detection code
                       
 
 Need to Change List:
 
 Potential Problems List:
+    - Only uses one wheel's IR sensor, so assumes both wheels spin at a constant speed
 
 Need to Add List:
     - Start and end location for Hopper Detection
@@ -26,7 +33,7 @@ Need to Add List:
 
 */
 #include <NewPing.h>
-#include <math.h>
+//#include <math.h>
 
 //Defined Constants
 #define SERIAL_COMM_BOOL 1 //1 if using serial communication, else 0
@@ -49,9 +56,16 @@ Need to Add List:
 #define NUMBER_BOARD_ROWS 6 //number of rows on the game board
 #define SERIAL_BAUD_RATE 9600 //Serial bits per second
 
+#define LEFT_IR_PIN 5 //digital pin for the left wheel's IR sensor
+#define RIGHT_IR_PIN 5 //digitial pin for the right wheel's IR sensor
 #define WHEEL_IR_DELAY 15 //time between checks for the wheel IR sensors
 #define WHEEL_CIRCUMFERENCE 15 //circumference of the wheel (in cm)
 #define WHEEL_NUM_HOLES 12 //number of holes in the wheel
+#define ROBOT_WIDTH 10 //half the robot width in cm
+#define ROBOT_MAX_WIDTH 15 //half the maximum robot width in cm
+#define ROBOT_LENGTH_FRONT 10//distance from point of rotation to front of robot
+#define ROBOT_LENGTH_BACK 5 //distance from point of rotation to back of robot
+#define ROBOT_TURNING_RADIUS 5 //distance from the center of rotation to the wheels of the robot
 
 #define RIGHT_WHEEL_ENABLE_PIN 4 //enable the right wheel motor
 #define LEFT_WHEEL_ENABLE_PIN 10 //enable the left wheel motor
@@ -61,6 +75,11 @@ Need to Add List:
 #define RIGHT_BACKWARD_PIN 2 //set to high to move right wheel backward
 
 #define LINE_SEP_DIST 20 //Distance between black lines (in cm)
+#define LEFT_LINE_SENSOR_PIN 2 //left line detecting black/white IR sensor pin
+#define MID_LINE_SENSOR_PIN 3 //middle line detecting black/white IR sensor pin
+#define RIGHT_LINE_SENSOR_PIN 4 //right line detecting black/white IR sensor pin
+#define CHECK_LINE_SENSOR_TIME 2 //milliseconds since the line sensors start to check for black/white
+#define LINE_SENSOR_DELAY 10 //delay in milliseconds between checks to the line sensors
 
 //Test specific defines 
 #define DETECT_HOPPER_TEST_NUM_HOPPERS 1
@@ -79,14 +98,16 @@ typedef struct
 //Global Variables
 NewPing hopper_detector(HOP_DETECT_TRIG_PIN, HOP_DETECT_ECHO_PIN, HOP_DETECT_MAX_DIST); // Create NewPing object for hopper detection
 unsigned long ping_time = 0;     // holds time of the next ping
-unsigned long left_ir_time = 0;     // holds time of the next check of left wheel's IR sensor
+unsigned long wheel_ir_time = 0;     // holds time of the next check of wheel IR sensors
+unsigned long line_sensor_time = 0; //holds time of the next check of the line sensors
+int line_sensor_state = 0; //if 0 need to turn on line sensor reflect, if 1 need to check for colour
 int prev_ir_left = 0; //stores the last value measured by the left wheel IR
-unsigned long right_ir_time = 0;     // holds time of the next check of right wheel's IR sensor
 int prev_ir_right = 0; //stores the last value measured by the right wheel IR
 float initial_orient_robot; // holds the initial orientation value recorded from the compass
+int robot_direction; //1 if moving forward, -1 if moving backward, 0 if turning
 float x_robot; // holds robot's current x-axis location
 float y_robot; // holds robot's current y-axis location
-float orient_robot; //holds robot's orientation
+float robot_orient; //holds robot's orientation, 0 is towards gameboard, clockwise is positive in radian
 Hopper hoppers[NUMBER_OF_HOPPERS]; // Saves the four game field hopper structures
 int gameboard[NUMBER_BOARD_COLUMNS][NUMBER_BOARD_ROWS] = {0}; // 0 = no ball, 1 = our ball, 2 = their ball, 3 = probably our ball, 4 = probably their ball
 unsigned int next_ball_column; //holds the column to play the next ball into?
@@ -97,7 +118,6 @@ void setup_pins();
 int detect_hoppers(); // detect hopper routine. Goes to initial position to left of hoppers then moves right and scans
 void detect_hoppers_error(int error);
 void update_location(long cur_time);
-void update_hoppers_location(); // Saves the locations and orientations of all the hoppers in the hoppers array
 void compass_init(); // measure the initial compass starting position and save to initial_orient_robot
 void hopper_detect_initial_pos(); // go to initial position to the left of the hoppers
 void init_hoppers(); // set up hoppers array
@@ -121,7 +141,13 @@ void go_to_hopper_error(int error);
 //handles all serial communication NOTE: print newline character after function call
 void serial_comm(long cur_time, int prev_dist, int prev_dist2, int cur_hopper, int flag, int ping_dist, int count); 
 void stop_robot_motion(); //turn off wheel motors
-void start_robot_forward(); //turn on wheel forwards to move forward
+void start_robot_forward(); //turn on wheels to move forward
+void start_robot_backward(); //turn on wheels to move backwards
+void start_robot_clockwise(); //turn on wheels to turn clockwise
+void start_robot_counterclockwise(); //turn on wheels to turn counterclockwise
+void check_line_sensors(unsigned long cur_time); //checks the values from line sensors, know if on line and if passing lines
+void send_line_sensor_pulse(); //send pulse of light from the line sensors
+void robot_passed_line(); //update the robots position since we just passed over a line
 
 //Main Functions
 void main_setup(); //main program setup code
@@ -154,6 +180,8 @@ void setup_pins(){
   pinMode(RIGHT_BACKWARD_PIN, OUTPUT);
   pinMode(LEFT_FORWARD_PIN, OUTPUT);
   pinMode(LEFT_BACKWARD_PIN, OUTPUT);
+  pinMode(LEFT_IR_PIN, INPUT); 
+  pinMode(RIGHT_IR_PIN, INPUT);
   //Enable the wheels to sping
   //digitalWrite(RIGHT_WHEEL_ENABLE_PIN, HIGH);
   //digitalWrite(LEFT_WHEEL_ENABLE_PIN, HIGH);
@@ -163,10 +191,8 @@ int detect_hoppers(){
   hopper_detect_initial_pos(); // get to initial position for detecting hoppers
   long cur_time = millis(); //Record the current robot time
   ping_time = cur_time; // initialize ping time
-  if (left_ir_time == 0){
-    left_ir_time = cur_time;}
-  if (right_ir_time == 0){
-    right_ir_time = cur_time;}
+  if (wheel_ir_time == 0){
+    wheel_ir_time = cur_time;}
   int prev_dist = 0; // Saves last measured important distance
   int cur_hopper = 0; //record current hopper we are finding, either 0 or 1
   int flag = 1; // 1 if we are ready to detect a new hopper, 2 if we found 3rd leg, else 0
@@ -247,45 +273,30 @@ int detect_hoppers(){
   return 0;
 }
 
-/*int detect_hoppers(){
-  hopper_detect_initial_pos(); // get to initial position for detecting hoppers
-  long cur_time = millis(); //Record the current robot time
-  ping_time = cur_time; // initialize ping time
-  int ping_dist = 0; // keeps track of the distance measured by the most recent ping
-  long next_time = cur_time + 5000;
-  int flag = 0;
-  while (1){ //Run until end is reached
-    cur_time = millis();
-    if (cur_time > ping_time){ // send another ping
-      unsigned int ping_record_time = hopper_detector.ping(); //measures time to receive ping
-      ping_dist = ping_record_time / US_ROUNDTRIP_CM + (int) y_robot; // ping distance from gamefield bottom
-      Serial.print(ping_dist); // print the ping distance to Serial
-      Serial.print("    ");
-      Serial.println((int) y_robot);
-      ping_time += HOP_DETECT_PING_DELAY; // add delay before another ping is sent
-    }
-    if (cur_time > next_time){
-      if (flag == 0){
-        flag = 1;
-        digitalWrite(RIGHT_WHEEL_ENABLE_PIN, HIGH);
-        digitalWrite(LEFT_WHEEL_ENABLE_PIN, HIGH);
-        next_time += 5000;
-      }
-      else{
-        flag = 0;
-        digitalWrite(RIGHT_WHEEL_ENABLE_PIN, HIGH);
-        digitalWrite(LEFT_WHEEL_ENABLE_PIN, HIGH);
-        next_time += 5000;
-      }
-    }
-  }
-}*/
-
 void update_location(long cur_time){
-  if (cur_time > right_ir_time){
-    x_robot += 0.1; // TEMP **CHANGE**
-    //check IRs
-    right_ir_time += WHEEL_IR_DELAY;
+  if (cur_time > wheel_ir_time){
+    int left_ir = digitalRead(LEFT_IR_PIN);
+    if (left_ir > 1) left_ir = 1;
+    //int right_ir = digitalRead(RIGHT_IR_PIN); //not used
+    if (robot_direction == 1 || robot_direction == -1){ //robot is driving straight forward or backwards
+      if (prev_ir_left == 0 && left_ir == 1){
+        x_robot += cos(robot_orient) * robot_direction * WHEEL_CIRCUMFERENCE / WHEEL_NUM_HOLES; // TEMP
+        y_robot += sin(robot_orient) * robot_direction * WHEEL_CIRCUMFERENCE / WHEEL_NUM_HOLES;
+      }
+    }
+    if (robot_direction == 2){ //robot is turning clockwise
+      if (prev_ir_left == 0 && left_ir == 1){
+        robot_orient += (WHEEL_CIRCUMFERENCE / WHEEL_NUM_HOLES) / ROBOT_TURNING_RADIUS;
+      }
+    }
+    if (robot_direction == -2){ //robot is turning counterclockwise
+      if (prev_ir_left == 0 && left_ir == 1){
+        robot_orient -= (WHEEL_CIRCUMFERENCE / WHEEL_NUM_HOLES) / ROBOT_TURNING_RADIUS;
+      }
+    }
+    wheel_ir_time += WHEEL_IR_DELAY;
+  prev_ir_left = left_ir;
+  //prev_ir_right == right_ir;
   }
 }
 
@@ -318,28 +329,50 @@ void stop_robot_motion(){
 }
 
 void start_robot_forward(){
+  robot_direction = 1;
   digitalWrite(RIGHT_WHEEL_ENABLE_PIN, HIGH);
   digitalWrite(LEFT_WHEEL_ENABLE_PIN, HIGH);
-  delay(10);
+  //delay(10);
   digitalWrite(LEFT_BACKWARD_PIN, LOW);
   digitalWrite(LEFT_FORWARD_PIN, HIGH);
   digitalWrite(RIGHT_BACKWARD_PIN, LOW);
   digitalWrite(RIGHT_FORWARD_PIN, HIGH);
 }
 
-void detect_hoppers_error(int error){
-  // Set error flags so that robot assumes just one random hopper in middle, but don't drive through middle error
+void start_robot_backward(){
+  robot_direction = -1;
+  digitalWrite(RIGHT_WHEEL_ENABLE_PIN, HIGH);
+  digitalWrite(LEFT_WHEEL_ENABLE_PIN, HIGH);
+  //delay(10);
+  digitalWrite(LEFT_BACKWARD_PIN, HIGH);
+  digitalWrite(LEFT_FORWARD_PIN, LOW);
+  digitalWrite(RIGHT_BACKWARD_PIN, HIGH);
+  digitalWrite(RIGHT_FORWARD_PIN, LOW);
 }
 
-void update_hoppers_location(){ 
-  if (hopper_detector.check_timer()) { // True if a distance ping was measured
-    Serial.print("Ping: "); //Serial prints for checking values received - not in final code
-    Serial.print(hopper_detector.ping_result / US_ROUNDTRIP_CM); //convert microsecond result of time for ping to return to cm using US_ROUNDTRIP_CM
-    Serial.println("cm");
-    // Compare received values to previous received values
-    // two orientations of hoppers are (far - closer - far) and (closer - far - closer)
-    // save hoppers to struct
-  }
+void start_robot_clockwise(){
+  robot_direction = 2;
+  digitalWrite(RIGHT_WHEEL_ENABLE_PIN, HIGH);
+  digitalWrite(LEFT_WHEEL_ENABLE_PIN, HIGH);
+  delay(10);
+  digitalWrite(LEFT_BACKWARD_PIN, LOW);
+  digitalWrite(LEFT_FORWARD_PIN, HIGH);
+  digitalWrite(RIGHT_BACKWARD_PIN, HIGH);
+  digitalWrite(RIGHT_FORWARD_PIN, LOW);
+}
+
+void start_robot_counterclockwise(){
+  robot_direction = -2;
+  digitalWrite(RIGHT_WHEEL_ENABLE_PIN, HIGH);
+  digitalWrite(LEFT_WHEEL_ENABLE_PIN, HIGH);
+  delay(10);
+  digitalWrite(LEFT_BACKWARD_PIN, HIGH);
+  digitalWrite(LEFT_FORWARD_PIN, LOW);
+  digitalWrite(RIGHT_BACKWARD_PIN, LOW);
+  digitalWrite(RIGHT_FORWARD_PIN, HIGH);
+}
+void detect_hoppers_error(int error){
+  // Set error flags so that robot assumes just one random hopper in middle, but don't drive through middle error
 }
 
 void compass_init(){
@@ -450,13 +483,13 @@ void serial_comm(long cur_time, int prev_dist, int prev_dist2, int cur_hopper, i
   if (SERIAL_COMM_BOOL){
     Serial.print(ping_time);
     Serial.print(',');
-    Serial.print(left_ir_time);
+    Serial.print(wheel_ir_time);
     Serial.print(',');
     Serial.print(prev_ir_left);
     Serial.print(',');
-    Serial.print(right_ir_time);
-    Serial.print(',');
     Serial.print(prev_ir_right);
+    Serial.print(',');
+    Serial.print(robot_direction);
     Serial.print(',');
     Serial.print(initial_orient_robot);
     Serial.print(',');
@@ -464,7 +497,7 @@ void serial_comm(long cur_time, int prev_dist, int prev_dist2, int cur_hopper, i
     Serial.print(',');
     Serial.print(y_robot);
     Serial.print(',');
-    Serial.print(orient_robot);
+    Serial.print(robot_orient);
     Serial.print(',');
     Serial.print(next_ball_column);
     Serial.print(',');
@@ -633,4 +666,47 @@ void locate_obstacle(){
 }
 void gameplay_strategy(){
   
+}
+
+void check_line_sensors(unsigned long cur_time){
+  if (cur_time < line_sensor_time) return;
+  if (line_sensor_state == 0){ //Send out pulse from the line sensors
+    send_line_sensor_pulse(); //send pulse
+    line_sensor_time += CHECK_LINE_SENSOR_TIME; //update time to check the sensors
+    line_sensor_state = 1; //set state to check for the colours measured
+  }
+  else { //Check values recorded by the line sensors
+    int left_val = digitalRead(LEFT_LINE_SENSOR_PIN);
+    int mid_val = digitalRead(MID_LINE_SENSOR_PIN);
+    int right_val = digitalRead(RIGHT_LINE_SENSOR_PIN);
+    if (left_val == HIGH && mid_val == HIGH && right_val == HIGH){
+      robot_passed_line();
+      return;
+    }
+    if (left_val == HIGH && mid_val != HIGH){
+      // turning too far right
+      return;
+    }
+    if (right_val == HIGH && mid_val != HIGH){
+       // turning too far left
+    }
+  }
+}
+
+void send_line_sensor_pulse(){
+  pinMode(LEFT_LINE_SENSOR_PIN, OUTPUT );
+  digitalWrite(LEFT_LINE_SENSOR_PIN, HIGH );
+  pinMode(MID_LINE_SENSOR_PIN, OUTPUT );
+  digitalWrite(MID_LINE_SENSOR_PIN, HIGH ); 
+  pinMode(RIGHT_LINE_SENSOR_PIN, OUTPUT );
+  digitalWrite(RIGHT_LINE_SENSOR_PIN, HIGH );   
+  delayMicroseconds(10);
+  pinMode(LEFT_LINE_SENSOR_PIN, INPUT );
+  pinMode(MID_LINE_SENSOR_PIN, INPUT );
+  pinMode(RIGHT_LINE_SENSOR_PIN, INPUT );
+}
+
+void robot_passed_line(){
+  robot_orient = robot_orient % PI;
+  if robot_orient
 }
