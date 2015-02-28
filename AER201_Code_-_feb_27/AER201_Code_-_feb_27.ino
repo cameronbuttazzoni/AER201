@@ -20,7 +20,6 @@ Version Control:
                 - Started adding black/white sensor for line detection code
             1.6:
                 - Changed all cur_time recording things to microseconds
-                - Implemented line following algorithm
                       
 
 Need to Change List:
@@ -88,24 +87,16 @@ Need to Add List:
 #define LINE_SENSOR_DELAY 10 //delay in milliseconds between checks to the line sensors
 #define LINE_PASS_ANGLE_ERROR 0.5//angle in radians must be within for passing lines to register position updates
 #define LINE_POSITION_ERROR 5 //error in position when going over line in cm
-#define GOOD_ON_TRACK_TIME 2000000 //microseconds that the robot should be on the line for
+#define GOOD_ON_TRACK_TIME 5000000 //microseconds that the robot is on a line for
 #define MIN_SPEED_CORRECTION_VALUE 10 //minimum value to change wheel speed by when veering off course
 #define MAX_SPEED_CORRECTION_VALUE 100 //max value to change wheel speed for slight off course
+#define CHECK_SPEED_CORRECTION_FACTOR 0.5 //compares wheel speed to max speed by this amount to determine if turn is large, 0<x<1
 
 //math
 #define PI_OVER_TWO 1.5708
 #define PI_THREE_OVER_TWO 4.7124
 
 //Test specific defines 
-
-//1 Controlled Locomotion
-#define TEST_ONE_INITIAL_X 0 //coordinates based on inital line start
-#define TEST_ONE_INITIAL_Y 0
-#define TEST_ONE_FINAL_X 0
-#define TEST_ONE_FINAL_Y 0
-#define TEST_ONE_INITIAL_ORIENT //radians
-
-//2
 #define DETECT_HOPPER_TEST_NUM_HOPPERS 1
 
 //Structures
@@ -140,9 +131,8 @@ unsigned int next_ball_column; //holds the column to play the next ball into?
 unsigned int next_hopper; //holds the next hopper to get a ball from
 int left_wheel_speed = 255; //speed of left wheel
 int right_wheel_speed = 255; //speed of right wheel
-int correction_state = 0; //0 = no correction, 1 correct when "slightly off course", 2 correct when "far off course", pos is robot going right, neg is left (so correct opposite this)
-int correction_factor = 0; //Indicates the degree of line correction the robot has experienced
-int off_track_flag = 0; //has value of 1 if last line check was off the line
+unsigned int correct_angle = 0; //if 1, need to swap wheel speeds momentarily
+unsigned long correct_angle_time = 0; //time when done with correction
 unsigned long on_track_time = 0; //records the last time the robot was on track
 
 //Functions
@@ -180,11 +170,7 @@ void start_robot_counterclockwise(); //turn on wheels to turn counterclockwise
 void check_line_sensors(unsigned long cur_time); //checks the values from line sensors, know if on line and if passing lines
 void send_line_sensor_pulse(); //send pulse of light from the line sensors
 void robot_passed_line(); //update the robots position since we just passed over a line
-void line_on_track(unsigned long cur_time); //robot is following the line successfully
-void line_slightly_left(); //robot is slightly to the left of the line
-void line_slightly_right(); //robot is slightly to the right of the line
-void line_far_left(); //robot is far left of the line
-void line_far_right(); //robot is far right of the line
+int slight_turn_func(int wheel); //calculates the change in motor speed to use, gets 0 for left wheel, 1 for right wheel
 
 //Main Functions
 void main_setup(); //main program setup code
@@ -600,26 +586,7 @@ void main_loop(){
 }
 
 void controlled_locomotion(){
-  x_line_robot = TEST_ONE_INITIAL_X;
-  y_line_robot = TEST_ONE_INITIAL_Y;
-  x_robot = TEST_ONE_INITIAL_X * LINE_SEP_DIST;
-  y_robot = TEST_ONE_INITIAL_Y * LINE_SEP_DIST;
-  robot_orient = TEST_ONE_INITIAL_ORIENT;
-  if (robot_orient < 0) robot_orient += 2*PI;
-  if (abs(robot_orient - PI) < LINE_PASS_ANGLE_ERROR || abs(robot_orient - PI_THREE_OVER_TWO) < LINE_PASS_ANGLE_ERROR){ //go left/right first
-    robot_controlled_drive_horiz(TEST_ONE_FINAL_X * LINE_SEP_DIST);
-    if (TEST_ONE_FINAL_X > TEST_ONE_INIITIAL_X){ //need to go right
-      if(abs(robot_orient - PI) < LINE_PASS_ANGLE_ERROR){ //facing to right so drive forward
-        start_robot_forward();
-      }
-      else{ //facing to left so drive backwards
-        
-      }
-    }
-  }
-  else{//go up/down first
-    
-  }
+  
 }
 
 void pick_up_game_ball(){
@@ -638,7 +605,6 @@ void navigate_hopper(){
 void move_around_obstacle(){
   
 }
-
 void locate_obstacle(){
   void start_robot_forward(); //turn on wheel forwards to move forward
   unsigned long cur_time = micros(); //Record the current robot time
@@ -651,7 +617,6 @@ void locate_obstacle(){
   int count = 0; // keeps track of the number of similar distance pings in a row
   while (1){ //Run until end is reached
     cur_time = micros(); //update current time every loop
-    check_line_sensors(cur_time); //follow line
     if (cur_time > ping_time){ // send another ping if enough time has passed
       unsigned int ping_record_time = hopper_detector.ping(); //measures time to receive ping
       ping_dist = ping_record_time / US_ROUNDTRIP_CM + (int) y_robot; // ping distance from gamefield bottom
@@ -749,21 +714,34 @@ void check_line_sensors(unsigned long cur_time){ // CURTIME in MICROSECONDS
       line_sensor_time += PULSE_LINE_SENSOR_TIME; //add delay before next pulse
       return;
     }
-    correction_factor += correction_state;
     if (left_val == LOW && mid_val == HIGH && right_val == LOW){ //on track
-      line_on_track(cur_time);
+      on_track_time = micros();
+      if (correct_angle == 0){
+      }
+      if (correct_angle == 1){
+        correct_angle_time = on_track_time + 
+      left_wheel_speed = LEFT_WHEEL_MAX_SPEED;
+      right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
     }
     if (left_val == HIGH && mid_val == HIGH){ //slightly too far right
-      line_slightly_right();
+      left_wheel_speed = slight_turn_func(0); //0 is left wheel
+      if (left_wheel_speed < LEFT_WHEEL_MAX_SPEED * CHECK_SPEED_CORRECTION_FACTOR) correct_angle = 1;
+      else correct_angle = 0;
     }
     if (left_val == HIGH && mid_val == LOW){ //too far right
-      line_far_right();
+      left_wheel_speed = slight_turn_func(0); //0 is left wheel //EDIT
+      if (left_wheel_speed < LEFT_WHEEL_MAX_SPEED * CHECK_SPEED_CORRECTION_FACTOR) correct_angle = 1;
+      else correct_angle = 0;
     }
     if (right_val == HIGH && mid_val == HIGH){ //slightly too far left
-      line_slightly_left();
+      right_wheel_speed = slight_turn_func(1); //1 is right wheel
+      if (right_wheel_speed < RIGHT_WHEEL_MAX_SPEED * CHECK_SPEED_CORRECTION_FACTOR) correct_angle = 1;
+      else correct_angle = 0;
     }
     if (right_val == HIGH && mid_val == LOW){ //too far left
-      line_far_left();
+      right_wheel_speed = slight_turn_func(1); //1 is right wheel //EDIT
+      if (right_wheel_speed < RIGHT_WHEEL_MAX_SPEED * CHECK_SPEED_CORRECTION_FACTOR) correct_angle = 1;
+      else correct_angle = 0;
     }
   if (robot_direction == 1) {start_robot_forward();}
   else {start_robot_backward();}
@@ -806,87 +784,21 @@ void robot_passed_line(){
   }
 }
 
-void line_on_track(unsigned long cur_time){
-  right_wheel_speed += (int) ((RIGHT_WHEEL_MAX_SPEED - right_wheel_speed) * (1 - 1/ (abs(correction_factor)))); //bring both wheels closer to max speeds
-  left_wheel_speed += (int) ((LEFT_WHEEL_MAX_SPEED - left_wheel_speed) * (1 - 1/ (abs(correction_factor))));
-  if (off_track_flag == 1){
-    off_track_flag = 0;
-    on_track_time = cur_time + GOOD_ON_TRACK_TIME;
-    return;
+int slight_turn_func(int wheel){
+  int cur_time = micros();
+  int scale = GOOD_ON_TRACK_TIME - (cur_time - on_track_time) / GOOD_ON_TRACK_TIME;
+  if (wheel == 0){ //left wheel
+    if (scale < 0) return LEFT_WHEEL_MAX_SPEED - MIN_SPEED_CORRECTION_VALUE;
+    return LEFT_WHEEL_MAX_SPEED - MAX_SPEED_CORRECTION_VALUE * (1 - scale);
   }
-  if (cur_time > on_track_time){ //have been on line for good amount of time
-    correction_state = 0;
-    correction_factor = 0;
-    right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
-    left_wheel_speed = LEFT_WHEEL_MAX_SPEED;
+  if (wheel == 1){ //right wheel
+    if (scale < 0) return RIGHT_WHEEL_MAX_SPEED - MIN_SPEED_CORRECTION_VALUE;
+    return RIGHT_WHEEL_MAX_SPEED - MAX_SPEED_CORRECTION_VALUE * (1 - scale);
   }
 }
-
-void line_slightly_left(){
-  off_track_flag = 1;
-  if (correction_factor == 0) correction_factor += correction_state; //prevent div by 0
-  if (correction_state == 2){ //coming from being far left
-    left_wheel_speed = LEFT_WHEEL_MAX_SPEED - (RIGHT_WHEEL_MAX_SPEED - right_wheel_speed) * (1 - 1/ (abs(correction_factor))); //turn opposite direction
-    right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
-    correction_state = -1; //now turning left
-  }
-  if (correction_state == -1){ //correcting slightly turning robot
-    if (correction_factor > 0){ //robot was far to the right
-      left_wheel_speed += (LEFT_WHEEL_MAX_SPEED - left_wheel_speed) * (1.0 - 1/ (abs(correction_factor)));
-    }
-    if (correction_factor < 0){ //robot was slightly left
-      right_wheel_speed = RIGHT_WHEEL_MAX_SPEED - (LEFT_WHEEL_MAX_SPEED - left_wheel_speed) * (1 - 1/ (abs(correction_factor))); //turn opposite direction slightly
-      left_wheel_speed = LEFT_WHEEL_MAX_SPEED;
-    }
-  }
-  if (correction_state == 0){
-    correction_state = 1;
-    left_wheel_speed = LEFT_WHEEL_MAX_SPEED - MIN_SPEED_CORRECTION_VALUE;
-    right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
-  }
-}
-
-void line_slightly_right(){
-  off_track_flag = 1;
-  if (correction_factor == 0) correction_factor += correction_state; //prevent div by 0
-  if (correction_state == -2){ //coming from being far right
-    right_wheel_speed = RIGHT_WHEEL_MAX_SPEED - (LEFT_WHEEL_MAX_SPEED - left_wheel_speed) * (1.0 - 1/ (abs(correction_factor))); //turn opposite direction
-    left_wheel_speed = LEFT_WHEEL_MAX_SPEED;
-    correction_state = 1; //now turning right
-  }
-  if (correction_state == 1){ //correcting slightly turning robot
-    if (correction_factor < 0){ //robot was far to the right
-      right_wheel_speed += (RIGHT_WHEEL_MAX_SPEED - right_wheel_speed) * (1.0 - 1/ (abs(correction_factor)));
-    }
-    if (correction_factor > 0){ //robot was slightly left
-      left_wheel_speed = LEFT_WHEEL_MAX_SPEED - (RIGHT_WHEEL_MAX_SPEED - right_wheel_speed) * (1.0 - 1/ (abs(correction_factor))); //turn opposite direction slightly
-      right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
-    }
-  }
-  if (correction_state == 0){
-    correction_state = -1;
-    left_wheel_speed = LEFT_WHEEL_MAX_SPEED - MIN_SPEED_CORRECTION_VALUE;
-    right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
-  }
-}
-
-void line_far_left(){ //too far left
-  off_track_flag = 1;
-  right_wheel_speed = RIGHT_WHEEL_MAX_SPEED - MAX_SPEED_CORRECTION_VALUE;
-  correction_state = 2;
-  if (correction_factor < 0) correction_factor = 1; //robot thinks its angled left, so reset this so it will think its angled right
-}
-
-void line_far_right(){
-  off_track_flag = 1;
-  left_wheel_speed = LEFT_WHEEL_MAX_SPEED - MAX_SPEED_CORRECTION_VALUE;
-  correction_state = -2;
-  if (correction_factor > 0) correction_factor = -1; //robot thinks its angled left, so reset this so it will think its angled right
-}
-
 
 void test(){
-  setup_pins();
+   setup_pins();
   start_robot_forward();
   Serial.begin(9600);
   while (1){

@@ -1,0 +1,85 @@
+int detect_hoppers(){
+  hopper_detect_initial_pos(); // get to initial position for detecting hoppers
+  unsigned long cur_time = micros(); //Record the current robot time
+  ping_time = cur_time; // initialize ping time
+  if (wheel_ir_time == 0){
+    wheel_ir_time = cur_time;}
+  int prev_dist = 0; // Saves last measured important distance
+  int cur_hopper = 0; //record current hopper we are finding, either 0 or 1
+  int flag = 1; // 1 if we are ready to detect a new hopper, 2 if we found 3rd leg, else 0
+  int ping_dist = 0; // keeps track of the distance measured by the most recent ping
+  int prev_dist2 = 0; //keeps track of previous ping
+  int count = 0; // keeps track of the number of similar distance pings in a row
+  while (1){ //Run until end is reached
+    cur_time = micros(); //update current time every loop
+    update_location(cur_time); // updates x_robot and y_robot
+    if (cur_time > ping_time){ // send another ping if enough time has passed
+      unsigned int ping_record_time = hopper_detector.ping(); //measures time to receive ping
+      ping_dist = ping_record_time / US_ROUNDTRIP_CM + (int) y_robot; // ping distance from gamefield bottom
+      //Serial communcation
+      serial_comm(cur_time, prev_dist, prev_dist2, cur_hopper, flag, ping_dist, count);
+      ping_time += HOP_DETECT_PING_DELAY; // add delay before another ping is sent
+      if (ping_dist > HOP_DETECT_MAX_DIST) continue; //prevent sonar malfunctions from affecting anything
+    }
+    else continue; //wait until time for new ping
+    if (abs(ping_dist - prev_dist2) > HOPPER_DETECT_ERROR){ //Previous two values are very different so continue
+      prev_dist2 = ping_dist; //update prev_dist2 to newer ping
+      count = 0; //reset count to 0 since cycle of similar ping distances is broken
+      continue; //wait for next ping
+    }
+    else count ++; //current ping distance is similar to previous ones
+    if (flag == 0){ // Need to find 3rd leg of hopper
+      if (hoppers[cur_hopper-1].orient == 0){ // middle leg is far 
+        if (ping_dist < prev_dist - HOPPER_DETECT_ERROR && ping_dist - (int) y_robot > HOPPER_DETETCT_Y_ERROR && count >= HOPPER_VALUES_IN_ROW) flag = 2; // found the 3rd leg
+      }
+      if (hoppers[cur_hopper-1].orient == 1){ // middle leg is closer
+        if (ping_dist > prev_dist + HOPPER_DETECT_ERROR && count >= HOPPER_VALUES_IN_ROW) flag = 2; // found the 3rd leg
+      }
+    }
+    //if (flag == 2 && ping_dist - y_robot < HOPPER_DETECT_Y_ERROR && count == HOPPER_VALUES_IN_ROW){ // Past the hopper
+      // WONT WORK SINCE DOESNT RETURN 0, SO NEW IF STATEMENT FIXES IT
+    if (flag == 2 && abs(prev_dist - ping_dist) > HOPPER_DETECT_ERROR && count >= HOPPER_VALUES_IN_ROW){ // Past the hopper
+      prev_dist = 0; //set prev_dist back to 0
+      flag = 1; //ready to search for next hopper
+      count = 0; //reset count to 0 since we have past the hopper
+    }
+    if (ping_dist > HOP_DETECT_MIN_DIST + (int) y_robot && flag == 1 && count >= HOPPER_VALUES_IN_ROW){ // found a hopper
+      if (prev_dist == 0){ // Found first leg of hopper
+        prev_dist = ping_dist; // prev dist stores first leg of hopper distance
+        prev_dist2 = ping_dist;
+        count = 0;
+        continue;
+      }
+      //found middle of hopper
+      //if (ping_dist > prev_dist + HOPPER_DETECT_ERROR && ping_dist < prev_dist + HOPPER_DETECT_MAX_ERROR){ // Hopper is Orientation 0
+      if (ping_dist > prev_dist + HOPPER_DETECT_ERROR){ // Hopper is Orientation 0
+        hoppers[cur_hopper].x = (int) x_robot / LINE_SEP_DIST;
+        hoppers[cur_hopper].y = prev_dist / LINE_SEP_DIST;
+        hoppers[cur_hopper].orient = 0;
+        hoppers[cur_hopper].balls = RANDOM_HOPPER_BALLS_NUM;
+        cur_hopper++; //start looking for the next hopper
+        flag = 0;
+        prev_dist = ping_dist; //update prev_dist to distance to the middle leg
+        count = 0; //found middle leg of hopper so reset count to 0
+      }
+      //if (ping_dist < prev_dist - HOPPER_DETECT_ERROR && ping_dist > prev_dist - HOPPER_DETECT_MAX_ERROR){ // Hopper is Orientation 1
+      if (ping_dist < prev_dist - HOPPER_DETECT_ERROR){ // Hopper is Orientation 1
+        // Save state
+        hoppers[cur_hopper].x = (int) x_robot / LINE_SEP_DIST;
+        hoppers[cur_hopper].y = prev_dist / LINE_SEP_DIST;
+        hoppers[cur_hopper].orient = 1;
+        hoppers[cur_hopper].balls = RANDOM_HOPPER_BALLS_NUM;
+        cur_hopper++; //start looking for the next hopper
+        flag = 0;
+        prev_dist = ping_dist; //update prev_dist to distance to the middle leg
+        count = 0; //found middle leg of hopper so reset count to 0
+      }
+    }
+    // If both hoppers are found, then end the function
+    if (cur_hopper >= NUMBER_OF_RAN_HOPPERS) break;
+    prev_dist2 = ping_dist; //update new previous distance value
+    // If the robot reaches the end of the path (past sensors) return error
+    }
+  display_hoppers(); //Shows data for each hopper on serial
+  return 0;
+}

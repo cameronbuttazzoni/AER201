@@ -97,15 +97,6 @@ Need to Add List:
 #define PI_THREE_OVER_TWO 4.7124
 
 //Test specific defines 
-
-//1 Controlled Locomotion
-#define TEST_ONE_INITIAL_X 0 //coordinates based on inital line start
-#define TEST_ONE_INITIAL_Y 0
-#define TEST_ONE_FINAL_X 0
-#define TEST_ONE_FINAL_Y 0
-#define TEST_ONE_INITIAL_ORIENT //radians
-
-//2
 #define DETECT_HOPPER_TEST_NUM_HOPPERS 1
 
 //Structures
@@ -600,26 +591,7 @@ void main_loop(){
 }
 
 void controlled_locomotion(){
-  x_line_robot = TEST_ONE_INITIAL_X;
-  y_line_robot = TEST_ONE_INITIAL_Y;
-  x_robot = TEST_ONE_INITIAL_X * LINE_SEP_DIST;
-  y_robot = TEST_ONE_INITIAL_Y * LINE_SEP_DIST;
-  robot_orient = TEST_ONE_INITIAL_ORIENT;
-  if (robot_orient < 0) robot_orient += 2*PI;
-  if (abs(robot_orient - PI) < LINE_PASS_ANGLE_ERROR || abs(robot_orient - PI_THREE_OVER_TWO) < LINE_PASS_ANGLE_ERROR){ //go left/right first
-    robot_controlled_drive_horiz(TEST_ONE_FINAL_X * LINE_SEP_DIST);
-    if (TEST_ONE_FINAL_X > TEST_ONE_INIITIAL_X){ //need to go right
-      if(abs(robot_orient - PI) < LINE_PASS_ANGLE_ERROR){ //facing to right so drive forward
-        start_robot_forward();
-      }
-      else{ //facing to left so drive backwards
-        
-      }
-    }
-  }
-  else{//go up/down first
-    
-  }
+  
 }
 
 void pick_up_game_ball(){
@@ -638,7 +610,6 @@ void navigate_hopper(){
 void move_around_obstacle(){
   
 }
-
 void locate_obstacle(){
   void start_robot_forward(); //turn on wheel forwards to move forward
   unsigned long cur_time = micros(); //Record the current robot time
@@ -651,7 +622,6 @@ void locate_obstacle(){
   int count = 0; // keeps track of the number of similar distance pings in a row
   while (1){ //Run until end is reached
     cur_time = micros(); //update current time every loop
-    check_line_sensors(cur_time); //follow line
     if (cur_time > ping_time){ // send another ping if enough time has passed
       unsigned int ping_record_time = hopper_detector.ping(); //measures time to receive ping
       ping_dist = ping_record_time / US_ROUNDTRIP_CM + (int) y_robot; // ping distance from gamefield bottom
@@ -811,7 +781,7 @@ void line_on_track(unsigned long cur_time){
   left_wheel_speed += (int) ((LEFT_WHEEL_MAX_SPEED - left_wheel_speed) * (1 - 1/ (abs(correction_factor))));
   if (off_track_flag == 1){
     off_track_flag = 0;
-    on_track_time = cur_time + GOOD_ON_TRACK_TIME;
+    off_track_time = cur_time + GOOD_ON_TRACK_TIME;
     return;
   }
   if (cur_time > on_track_time){ //have been on line for good amount of time
@@ -821,10 +791,9 @@ void line_on_track(unsigned long cur_time){
     left_wheel_speed = LEFT_WHEEL_MAX_SPEED;
   }
 }
-
 void line_slightly_left(){
   off_track_flag = 1;
-  if (correction_factor == 0) correction_factor += correction_state; //prevent div by 0
+  if (correction_factor == 0) correction_factor += correction_angle; //prevent div by 0
   if (correction_state == 2){ //coming from being far left
     left_wheel_speed = LEFT_WHEEL_MAX_SPEED - (RIGHT_WHEEL_MAX_SPEED - right_wheel_speed) * (1 - 1/ (abs(correction_factor))); //turn opposite direction
     right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
@@ -845,7 +814,6 @@ void line_slightly_left(){
     right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
   }
 }
-
 void line_slightly_right(){
   off_track_flag = 1;
   if (correction_factor == 0) correction_factor += correction_state; //prevent div by 0
@@ -872,14 +840,13 @@ void line_slightly_right(){
 
 void line_far_left(){ //too far left
   off_track_flag = 1;
-  right_wheel_speed = RIGHT_WHEEL_MAX_SPEED - MAX_SPEED_CORRECTION_VALUE;
+  right_wheel_speed = RIGHT_WHEEL_MAX_SPEED - MAX_SPEED_CORRECTION_FACTOR;
   correction_state = 2;
   if (correction_factor < 0) correction_factor = 1; //robot thinks its angled left, so reset this so it will think its angled right
 }
-
 void line_far_right(){
   off_track_flag = 1;
-  left_wheel_speed = LEFT_WHEEL_MAX_SPEED - MAX_SPEED_CORRECTION_VALUE;
+  left_wheel_speed = LEFT_WHEEL_MAX_SPEED - MAX_SPEED_CORRECTION_FACTOR;
   correction_state = -2;
   if (correction_factor > 0) correction_factor = -1; //robot thinks its angled left, so reset this so it will think its angled right
 }
@@ -891,7 +858,7 @@ void test(){
   Serial.begin(9600);
   while (1){
     unsigned long cur_time = micros();
-    check_line_sensors(cur_time);
+    //check_line_sensors(cur_time);
     //delay(50);
   }
 }
