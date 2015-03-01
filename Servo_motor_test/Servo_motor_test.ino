@@ -1,4 +1,4 @@
-#define SERVO_PIN 12
+#define SERVO_PIN 11
 
 
 #include <Servo.h>
@@ -33,6 +33,6 @@ void setup(){
 void loop(){
   myServo.write(170);
   delay(3000);
-  myServo.write(135);
+  //myServo.write(135);
   delay(5000);
 }

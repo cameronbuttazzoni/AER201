@@ -277,8 +277,8 @@ void setup_pins(){
   pinMode(RIGHT_BACKWARD_PIN, OUTPUT);
   pinMode(LEFT_FORWARD_PIN, OUTPUT);
   pinMode(LEFT_BACKWARD_PIN, OUTPUT);
-  pinMode(LEFT_IR_PIN, INPUT); 
-  pinMode(RIGHT_IR_PIN, INPUT);
+  //pinMode(LEFT_IR_PIN, INPUT); 
+  //pinMode(RIGHT_IR_PIN, INPUT);
   fan_servo.attach(BALL_RELEASE_SERVO_PIN);
   fan_servo.write(BALL_RELEASE_SERVO_INITIAL_VAL);
   pinMode(BALL_GRAB_FAN_PIN, OUTPUT);
@@ -303,7 +303,7 @@ int detect_hoppers(){
       unsigned int ping_record_time = hopper_detector.ping(); //measures time to receive ping
       ping_dist = ping_record_time / US_ROUNDTRIP_CM + (int) y_robot; // ping distance from gamefield bottom
       //Serial communcation
-      serial_comm(cur_time, prev_dist, prev_dist2, cur_hopper, flag, ping_dist, count);
+      if (SERIAL_COMM_BOOL) serial_comm(cur_time, prev_dist, prev_dist2, cur_hopper, flag, ping_dist, count);
       ping_time += HOP_DETECT_PING_DELAY; // add delay before another ping is sent
       if (ping_dist > HOP_DETECT_MAX_DIST) continue; //prevent sonar malfunctions from affecting anything
     }
@@ -391,7 +391,7 @@ void update_location(unsigned long cur_time){
         robot_orient -= (WHEEL_CIRCUMFERENCE / WHEEL_NUM_HOLES) / ROBOT_TURNING_RADIUS;
       }
     }
-    wheel_ir_time += WHEEL_IR_DELAY;
+    wheel_ir_time = cur_time + WHEEL_IR_DELAY;
     prev_ir_left = left_ir;
     //prev_ir_right == right_ir;
   }
@@ -461,8 +461,8 @@ void start_robot_straight_backward(){
 
 void start_robot_clockwise(){
   robot_direction = 2;
-  analogWrite(RIGHT_WHEEL_ENABLE_PIN, RIGHT_WHEEL_MAX_SPEED);
-  analogWrite(LEFT_WHEEL_ENABLE_PIN, LEFT_WHEEL_MAX_SPEED);
+  analogWrite(RIGHT_WHEEL_ENABLE_PIN, RIGHT_WHEEL_TURN_SPEED);
+  analogWrite(LEFT_WHEEL_ENABLE_PIN, LEFT_WHEEL_TURN_SPEED);
   //delay(10);
   digitalWrite(LEFT_BACKWARD_PIN, LOW);
   digitalWrite(LEFT_FORWARD_PIN, HIGH);
@@ -472,8 +472,8 @@ void start_robot_clockwise(){
 
 void start_robot_counterclockwise(){
   robot_direction = -2;
-  analogWrite(RIGHT_WHEEL_ENABLE_PIN, RIGHT_WHEEL_MAX_SPEED);
-  analogWrite(LEFT_WHEEL_ENABLE_PIN, LEFT_WHEEL_MAX_SPEED);
+  analogWrite(RIGHT_WHEEL_ENABLE_PIN, RIGHT_WHEEL_TURN_SPEED);
+  analogWrite(LEFT_WHEEL_ENABLE_PIN, LEFT_WHEEL_TURN_SPEED);
   //delay(10);
   digitalWrite(LEFT_BACKWARD_PIN, HIGH);
   digitalWrite(LEFT_FORWARD_PIN, LOW);
@@ -482,8 +482,6 @@ void start_robot_counterclockwise(){
 }
 
 void robot_quarter_turn_clockwise(){ //the robot turns 90 degrees clockwise, must be starting on a line intersection
-  right_wheel_speed = RIGHT_WHEEL_TURN_SPEED;
-  left_wheel_speed = LEFT_WHEEL_TURN_SPEED;
   start_robot_clockwise();
   int check = check_line_sensors_on_line();
   while (check != 0){ //need to get off of the initial line, checks for 2 in a row to prevent error
@@ -493,13 +491,11 @@ void robot_quarter_turn_clockwise(){ //the robot turns 90 degrees clockwise, mus
   }
   while (check != 1) check_line_sensors_on_line(); //keep turning until the line sensors all on a line
   stop_robot_motion();
-  robot_orient += PI_OVER_TWO - (robot_orient - ((int) (robot_orient / PI_OVER_TWO) * PI_OVER_TWO));
+  robot_orient += PI_OVER_TWO - abs((robot_orient - ((int) (robot_orient / PI_OVER_TWO) * PI_OVER_TWO));
   //robot_orient += PI_OVER_TWO;
 }
 
 void robot_quarter_turn_counterclockwise(){ //the robot turns 90 degrees clockwise, must be starting on a line intersection
-  right_wheel_speed = RIGHT_WHEEL_TURN_SPEED;
-  left_wheel_speed = LEFT_WHEEL_TURN_SPEED;
   start_robot_counterclockwise();
   int check = check_line_sensors_on_line();
   while (check != 0){ //need to get off of the initial line, checks for 2 in a row to prevent error
@@ -510,7 +506,7 @@ void robot_quarter_turn_counterclockwise(){ //the robot turns 90 degrees clockwi
   while (check != 1) check_line_sensors_on_line(); //keep turning until the line sensors all on a line
   stop_robot_motion();
   //robot_orient -= PI_OVER_TWO;
-  robot_orient -= (robot_orient - ((int) (robot_orient / PI_OVER_TWO) * PI_OVER_TWO));
+  robot_orient -= (robot_orient - abs(((int) (robot_orient / PI_OVER_TWO) * PI_OVER_TWO)));
 }
 
 void robot_turn_up(){
@@ -546,13 +542,13 @@ void compass_init(){
 void hopper_detect_initial_pos(){
   // drive the robot to a position on left side of board just outside of the starting area
   // update current location
-  x_robot = 0.0;
+  /*x_robot = 0.0;
   y_robot = 0.0;
   //drive forward
   digitalWrite(LEFT_BACKWARD_PIN, LOW);
   digitalWrite(LEFT_FORWARD_PIN, HIGH);
   digitalWrite(RIGHT_BACKWARD_PIN, LOW);
-  digitalWrite(RIGHT_FORWARD_PIN, HIGH);
+  digitalWrite(RIGHT_FORWARD_PIN, HIGH);*/
 }
 
 void init_hoppers(){
@@ -732,8 +728,8 @@ void controlled_locomotion(){
 }
 
 void robot_go_to_location(int final_x, int final_y){
-  if (robot_orient < 0) robot_orient += 2*PI; //forces angle between 0 and 2pi
-  if (abs(robot_orient - PI) < LINE_PASS_ANGLE_ERROR || abs(robot_orient - PI_THREE_OVER_TWO) < LINE_PASS_ANGLE_ERROR){ //go left/right first
+  normalize_orient(); //forces angle between -pi and pi
+  if (abs(robot_orient - PI) < LINE_PASS_ANGLE_ERROR || abs(robot_orient + PI) < LINE_PASS_ANGLE_ERROR){ //go left/right first
     robot_drive_horiz(final_x);
     robot_drive_vertic(final_y);
   }
@@ -743,26 +739,10 @@ void robot_go_to_location(int final_x, int final_y){
   }
   stop_robot_motion();
 }
-/*void controlled_locomotion(){
-  x_line_robot = TEST_ONE_INITIAL_X;
-  y_line_robot = TEST_ONE_INITIAL_Y;
-  x_robot = TEST_ONE_INITIAL_X * LINE_SEP_DIST;
-  y_robot = TEST_ONE_INITIAL_Y * LINE_SEP_DIST;
-  robot_orient = TEST_ONE_INITIAL_ORIENT;
-  if (robot_orient < 0) robot_orient += 2*PI; //forces angle between 0 and 2pi
-  if (abs(robot_orient - PI) < LINE_PASS_ANGLE_ERROR || abs(robot_orient - PI_THREE_OVER_TWO) < LINE_PASS_ANGLE_ERROR){ //go left/right first
-    robot_drive_horiz(TEST_ONE_FINAL_X);
-    robot_drive_vertic(TEST_ONE_FINAL_Y);
-  }
-  else{ //go up/down first
-    robot_drive_vertic(TEST_ONE_FINAL_Y);
-    robot_drive_horiz(TEST_ONE_FINAL_X);
-  }
-  stop_robot_motion();
-}*/
 
 void robot_drive_horiz(int lines){ //robot drives to the line specified by lines
-  if (abs(robot_orient - PI_OVER_TWO) > LINE_PASS_ANGLE_ERROR && abs(robot_orient - PI_THREE_OVER_TWO) > LINE_PASS_ANGLE_ERROR){ //not facing left/right
+  normalize_orient();
+  if (abs(robot_orient - PI_OVER_TWO) > LINE_PASS_ANGLE_ERROR && abs(robot_orient + PI_OVER_TWO) > LINE_PASS_ANGLE_ERROR){ //not facing left/right
     robot_quarter_turn_clockwise();
   }
   if (lines > x_line_robot){ //need to go right
@@ -775,7 +755,7 @@ void robot_drive_horiz(int lines){ //robot drives to the line specified by lines
       robot_drive_til_line(lines, 0);  //drive to line
     }
     else { //need to go left
-      if(abs(robot_orient - PI_THREE_OVER_TWO) < LINE_PASS_ANGLE_ERROR){ //facing to left so drive forward
+      if(abs(robot_orient + PI_OVER_TWO) < LINE_PASS_ANGLE_ERROR){ //facing to left so drive forward
         start_robot_straight_forward();
       }
       else{ //facing to left so drive backwards
@@ -786,7 +766,7 @@ void robot_drive_horiz(int lines){ //robot drives to the line specified by lines
 }
 
 void robot_drive_vertic(int lines){ //robot drives to the line specified by lines
-  if (abs(robot_orient - PI) > LINE_PASS_ANGLE_ERROR && abs(robot_orient) > LINE_PASS_ANGLE_ERROR){ //not facing up/down
+  if (abs(abs(robot_orient) - PI) > LINE_PASS_ANGLE_ERROR && abs(robot_orient) > LINE_PASS_ANGLE_ERROR){ //not facing up/down
     robot_quarter_turn_clockwise();
   }
   if (lines > y_line_robot){ //need to go up
@@ -799,7 +779,7 @@ void robot_drive_vertic(int lines){ //robot drives to the line specified by line
       robot_drive_til_line(lines, 1);  //drive to line
     }
     else { //need to go down
-      if(abs(robot_orient - PI) < LINE_PASS_ANGLE_ERROR){ //facing down so drive forward
+      if(abs(abs(robot_orient) - PI) < LINE_PASS_ANGLE_ERROR){ //facing down so drive forward
         start_robot_straight_forward();
       }
       else{ //facing up so drive backwards
@@ -820,7 +800,7 @@ void place_game_ball(){
   right_wheel_speed = RIGHT_WHEEL_GAMEBOARD_SPEED;
   if (abs(TEST_THREE_INITIAL_ORIENT - PI_OVER_TWO) < LINE_PASS_ANGLE_ERROR) start_robot_forward();
   if(abs(TEST_THREE_INITIAL_ORIENT - PI_THREE_OVER_TWO) < LINE_PASS_ANGLE_ERROR) start_robot_backward();
-  while(abs(x_robot - column_locations[TEST_THREE_FINAL_COLUMN]) > BALL_RELEASE_POSITION_ERROR){
+  while(abs(x_robot - ROBOT_BALL_DROP_X_DIST - column_locations[TEST_THREE_FINAL_COLUMN]) > BALL_RELEASE_POSITION_ERROR){
     unsigned long cur_time = micros();
     update_location(cur_time);
   }
@@ -848,9 +828,9 @@ void navigate_game_board(){
     update_location(cur_time);
   }
   stop_robot_motion();
-  robot_quarter_turn_clockwise(); //align robot so it is parallel to gameboard
+  robot_quarter_turn_counterclockwise(); //align robot so it is parallel to gameboard
   start_robot_forward();
-  while (x_robot < RELEASE_BALL_X_VALUE){//drive until right y distance
+  while (abs(x_robot - RELEASE_BALL_X_VALUE) > BALL_RELEASE_POSITION_ERROR){//drive until right x distance
     int cur_time = micros();
     update_location(cur_time);
   }
@@ -866,7 +846,7 @@ void move_around_obstacle(){
 
 void locate_obstacle(){ //start facing to the right, y = 2
   init_hoppers();
-  robot_drive_horiz(1);
+  robot_drive_horiz(7);
   y_line_robot = TEST_SEVEN_INITIAL_Y;
   x_line_robot = TEST_SEVEN_INITIAL_X;
   y_robot = TEST_SEVEN_INITIAL_Y * LINE_SEP_DIST;
