@@ -33,7 +33,7 @@ void setup(){
 void loop(){
   cur_val = analogRead(LEFT_IR_PIN);
   cur_val2 = analogRead(RIGHT_IR_PIN);
-  Serial.print(cur_val);
+  Serial.println(cur_val);
   Serial.print('\t');
   Serial.println(cur_val2);
   delay(50);}

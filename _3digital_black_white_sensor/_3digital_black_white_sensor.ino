@@ -2,9 +2,9 @@
 //Outputs via the serial terminal - Lower numbers mean more reflected
 //3000 or more means nothing was reflected.
 
-int pin1 = 6; //connected to digital pin
-int pin2 = 7;
-int pin3 = 8;
+int pin1 = 2; //connected to digital pin
+int pin2 = 3;
+int pin3 = 4;
 
 void setup(){
   Serial.begin(9600);

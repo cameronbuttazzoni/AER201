@@ -75,31 +75,31 @@ Need to Add List:
 #define ROBOT_BALL_DROP_X_DIST 5 //the number of cm the ball is from the wheel axis in direction perpendicular to wheel axis
 #define ROBOT_BALL_DROP_Y_DIST 5 //the number of cm the ball is from the wheel axis in direction parallel to wheel axis
 
-#define RIGHT_WHEEL_ENABLE_PIN 5 //enable the right wheel motor
-#define LEFT_WHEEL_ENABLE_PIN 10 //enable the left wheel motor
-#define LEFT_FORWARD_PIN 8 //Set to high to move left wheel forward
-#define LEFT_BACKWARD_PIN 9 //Set to high to move left wheel backward
-#define RIGHT_FORWARD_PIN 3 //set to high to move right wheel forward
-#define RIGHT_BACKWARD_PIN 2 //set to high to move right wheel backward
+#define RIGHT_WHEEL_ENABLE_PIN 10 //enable the right wheel motor
+#define LEFT_WHEEL_ENABLE_PIN 5 //enable the left wheel motor
+#define LEFT_FORWARD_PIN 6 //Set to high to move left wheel forward
+#define LEFT_BACKWARD_PIN 7 //Set to high to move left wheel backward
+#define RIGHT_FORWARD_PIN 9 //set to high to move right wheel forward
+#define RIGHT_BACKWARD_PIN 8 //set to high to move right wheel backward
 #define LEFT_WHEEL_MAX_SPEED 255 //max of 255
 #define RIGHT_WHEEL_MAX_SPEED 255 //max of 255
-#define LEFT_WHEEL_TURN_SPEED 70 //max of 255
-#define RIGHT_WHEEL_TURN_SPEED 70 //max of 255
+#define LEFT_WHEEL_TURN_SPEED 255 //max of 255
+#define RIGHT_WHEEL_TURN_SPEED 255 //max of 255
 
 #define LINE_SEP_DIST 20 //Distance between black lines (in cm)
 #define GAME_FIELD_WIDTH 160 //width of game_field in cm
 #define GAME_FIELD_HEIGHT 180 //height of game field in cm
-#define LEFT_LINE_SENSOR_PIN 11 //left line detecting black/white IR sensor pin
-#define MID_LINE_SENSOR_PIN 12 //middle line detecting black/white IR sensor pin
-#define RIGHT_LINE_SENSOR_PIN 13 //right line detecting black/white IR sensor pin
-#define CHECK_LINE_SENSOR_TIME 750 //MICROSECONDS since the line sensors start to check for black/white
-#define PULSE_LINE_SENSOR_TIME 10000 //send a pulse every CHECK_LINE_SENSOR_TIME + PULSE_LINE_SENSOR_TIME MICROSECONDS
+#define LEFT_LINE_SENSOR_PIN 2 //left line detecting black/white IR sensor pin
+#define MID_LINE_SENSOR_PIN 3 //middle line detecting black/white IR sensor pin
+#define RIGHT_LINE_SENSOR_PIN 4 //right line detecting black/white IR sensor pin
+#define CHECK_LINE_SENSOR_TIME 450 //MICROSECONDS since the line sensors start to check for black/white use 750
+#define PULSE_LINE_SENSOR_TIME 100000 //send a pulse every CHECK_LINE_SENSOR_TIME + PULSE_LINE_SENSOR_TIME MICROSECONDS
 #define LINE_SENSOR_DELAY 10 //delay in milliseconds between checks to the line sensors NOT USED
 #define LINE_PASS_ANGLE_ERROR 0.5//angle in radians must be within for passing lines to register position updates
 #define LINE_POSITION_ERROR 5 //error in position when going over line in cm
 #define GOOD_ON_TRACK_TIME 2000000 //microseconds that the robot should be on the line for
-#define MIN_SPEED_CORRECTION_VALUE 10 //minimum value to change wheel speed by when veering off course
-#define MAX_SPEED_CORRECTION_VALUE 100 //max value to change wheel speed for slight off course
+#define MIN_SPEED_CORRECTION_VALUE 20 //minimum value to change wheel speed by when veering off course
+#define MAX_SPEED_CORRECTION_VALUE 70 //max value to change wheel speed for slight off course
 #define ROBOT_TURN_UP_ERROR 0.05 //radians, make small
 
 #define COLUMN_SEP_DIST 5 //distance from one gameboard column to the next NOT EXACT YET
@@ -166,6 +166,12 @@ typedef struct
 
 //Global Variables
 const int column_locations[] = {65, 70, 75, 80, 85, 90, 95}; //stores the x-coordinates of each of the gameboard columns
+const int line_sensor_order[] = {2, 3, 1}; //1 is left sensor, 2 is middle sensor, 3 is right sensor
+const int line_sensor_delay[] = {700, 100, 250}; //cumulative delay, must be in order from smallest to largest 400, 320, 350
+int line_sensor_checks = 0;
+int left_line_sensor_val = LOW;
+int mid_line_sensor_val = LOW;
+int right_line_sensor_val = LOW;
 NewPing hopper_detector(HOP_DETECT_TRIG_PIN, HOP_DETECT_ECHO_PIN, HOP_DETECT_MAX_DIST); // Create NewPing object for hopper detection
 unsigned long ping_time = 0;     // holds time of the next ping
 unsigned long wheel_ir_time = 0;     // holds time of the next check of wheel IR sensors
@@ -277,6 +283,8 @@ void setup_pins(){
   pinMode(RIGHT_BACKWARD_PIN, OUTPUT);
   pinMode(LEFT_FORWARD_PIN, OUTPUT);
   pinMode(LEFT_BACKWARD_PIN, OUTPUT);
+  pinMode(BALL_GRAB_FAN_PIN, OUTPUT);
+  digitalWrite(BALL_GRAB_FAN_PIN, HIGH); //high means the fan is not on
   //pinMode(LEFT_IR_PIN, INPUT); 
   //pinMode(RIGHT_IR_PIN, INPUT);
   fan_servo.attach(BALL_RELEASE_SERVO_PIN);
@@ -373,7 +381,8 @@ int detect_hoppers(){
 void update_location(unsigned long cur_time){
   if (cur_time > wheel_ir_time){
     int left_ir = analogRead(LEFT_IR_PIN);
-    if (left_ir > 1) left_ir = 1;
+    if (left_ir < 5) left_ir = 0;
+    if (left_ir >= 5) left_ir = 1;
     //int right_ir = digitalRead(RIGHT_IR_PIN); //not used
     if (robot_direction == 1 || robot_direction == -1){ //robot is driving straight forward or backwards
       if (prev_ir_left == 0 && left_ir == 1){
@@ -489,9 +498,24 @@ void robot_quarter_turn_clockwise(){ //the robot turns 90 degrees clockwise, mus
     if (check == 1) continue;
     check = check_line_sensors_on_line(); 
   }
-  while (check != 1) check_line_sensors_on_line(); //keep turning until the line sensors all on a line
+  while (check != 1) check = check_line_sensors_on_line(); //keep turning until the line sensors all on a line
   stop_robot_motion();
-  robot_orient += PI_OVER_TWO - abs((robot_orient - ((int) (robot_orient / PI_OVER_TWO) * PI_OVER_TWO));
+  robot_orient += PI_OVER_TWO - abs(robot_orient - ((int) (robot_orient / PI_OVER_TWO) * PI_OVER_TWO));
+  //robot_orient += PI_OVER_TWO;
+}
+
+void robot_quarter_turn_clockwise2(){ //the robot turns 90 degrees clockwise, must be starting on a line intersection
+  start_robot_clockwise();
+  delay(2500);
+  int check = check_line_sensors_on_line();
+  /*while (check != 0){ //need to get off of the initial line, checks for 2 in a row to prevent error
+    check = check_line_sensors_on_line(); 
+    if (check == 1) continue;
+    check = check_line_sensors_on_line(); 
+  }*/
+  while (check != 1) check = check_line_sensors_on_line(); //keep turning until the line sensors all on a line
+  stop_robot_motion();
+  robot_orient += PI_OVER_TWO - abs(robot_orient - ((int) (robot_orient / PI_OVER_TWO) * PI_OVER_TWO));
   //robot_orient += PI_OVER_TWO;
 }
 
@@ -503,7 +527,22 @@ void robot_quarter_turn_counterclockwise(){ //the robot turns 90 degrees clockwi
     if (check == 1) continue;
     check = check_line_sensors_on_line(); 
   }
-  while (check != 1) check_line_sensors_on_line(); //keep turning until the line sensors all on a line
+  while (check != 1) check = check_line_sensors_on_line(); //keep turning until the line sensors all on a line
+  stop_robot_motion();
+  //robot_orient -= PI_OVER_TWO;
+  robot_orient -= (robot_orient - abs(((int) (robot_orient / PI_OVER_TWO) * PI_OVER_TWO)));
+}
+
+void robot_quarter_turn_counterclockwise2(){ //the robot turns 90 degrees clockwise, must be starting on a line intersection
+  start_robot_counterclockwise();
+  delay(2500);
+  int check = check_line_sensors_on_line();
+  /*while (check != 0){ //need to get off of the initial line, checks for 2 in a row to prevent error
+    check = check_line_sensors_on_line(); 
+    if (check == 1) continue;
+    check = check_line_sensors_on_line(); 
+  }*/
+  while (check != 1) check = check_line_sensors_on_line(); //keep turning until the line sensors all on a line
   stop_robot_motion();
   //robot_orient -= PI_OVER_TWO;
   robot_orient -= (robot_orient - abs(((int) (robot_orient / PI_OVER_TWO) * PI_OVER_TWO)));
@@ -790,9 +829,9 @@ void robot_drive_vertic(int lines){ //robot drives to the line specified by line
 }
 
 void pick_up_game_ball(){
-  digitalWrite(BALL_GRAB_FAN_PIN, HIGH);
+  digitalWrite(BALL_GRAB_FAN_PIN, LOW); //low means the fan is sucking up the ball
   delayMicroseconds(TEST_TWO_DELAY_TIME);
-  digitalWrite(BALL_GRAB_FAN_PIN, LOW);
+  digitalWrite(BALL_GRAB_FAN_PIN, HIGH);
 }
 
 void place_game_ball(){
@@ -937,10 +976,22 @@ void gameplay_strategy(){
 
 int check_line_sensors_on_line(){// returns 1 if all 3 sensors on line else returns 0
   send_line_sensor_pulse(); //send pulse
-  delayMicroseconds(CHECK_LINE_SENSOR_TIME);
-  int left_val = digitalRead(LEFT_LINE_SENSOR_PIN);
-  int mid_val = digitalRead(MID_LINE_SENSOR_PIN);
-  int right_val = digitalRead(RIGHT_LINE_SENSOR_PIN);
+  int left_val;
+  int mid_val;
+  int right_val;
+  for (int count = 0; count < 3; count ++){
+    int next_sensor = line_sensor_order[count];
+    delayMicroseconds(line_sensor_delay[count]);
+    if (next_sensor == 1) left_val = digitalRead(LEFT_LINE_SENSOR_PIN);
+    if (next_sensor == 2) mid_val = digitalRead(MID_LINE_SENSOR_PIN);
+    if (next_sensor == 3) right_val = digitalRead(RIGHT_LINE_SENSOR_PIN);
+  }
+  delayMicroseconds(PULSE_LINE_SENSOR_TIME);
+  Serial.print(left_val);
+  Serial.print('\t');
+  Serial.print(mid_val);
+  Serial.print('\t');
+  Serial.println(right_val);
   if (left_val == HIGH && mid_val == HIGH && right_val == HIGH){
       return 1;
   }
@@ -951,44 +1002,69 @@ void check_line_sensors(unsigned long cur_time){ // CURTIME in MICROSECONDS
   if (cur_time < line_sensor_time) return;
   if (line_sensor_state == 0){ //Send out pulse from the line sensors
     send_line_sensor_pulse(); //send pulse
-    line_sensor_time = cur_time + CHECK_LINE_SENSOR_TIME; //update time to check the sensors
-    line_sensor_state = 1; //set state to check for the colours measured
+    line_sensor_checks = 0;
+    line_sensor_time = cur_time + line_sensor_delay[line_sensor_checks]; //update time to check the sensors
+    line_sensor_state = line_sensor_order[line_sensor_checks]; //set state to check for the colours measured
   }
   else { //Check values recorded by the line sensors
-    int left_val = digitalRead(LEFT_LINE_SENSOR_PIN);
-    int mid_val = digitalRead(MID_LINE_SENSOR_PIN);
-    int right_val = digitalRead(RIGHT_LINE_SENSOR_PIN);
-    Serial.print(left_val);
-    Serial.print('\t');
-    Serial.print(mid_val);
-    Serial.print('\t');
-    Serial.println(right_val);
-    if (left_val == HIGH && mid_val == HIGH && right_val == HIGH){
-      robot_passed_line();
+  //Serial.println(line_sensor_state);
+    if (line_sensor_state == 1){
+      left_line_sensor_val = digitalRead(LEFT_LINE_SENSOR_PIN);
+      line_sensor_checks += 1;
+      line_sensor_time = cur_time + line_sensor_delay[line_sensor_checks];
+      if (line_sensor_checks < 3) line_sensor_state = line_sensor_order[line_sensor_checks];
+    }
+    else {
+      if (line_sensor_state == 2){
+        mid_line_sensor_val = digitalRead(MID_LINE_SENSOR_PIN);
+        line_sensor_checks += 1;
+        line_sensor_time = cur_time + line_sensor_delay[line_sensor_checks];
+        if (line_sensor_checks < 3) line_sensor_state = line_sensor_order[line_sensor_checks];
+      }
+      else {
+        if (line_sensor_state == 3){
+          right_line_sensor_val = digitalRead(RIGHT_LINE_SENSOR_PIN);
+          line_sensor_checks += 1;
+          line_sensor_time = cur_time + line_sensor_delay[line_sensor_checks];
+          if (line_sensor_checks < 3) line_sensor_state = line_sensor_order[line_sensor_checks];
+        }
+      }
+    }
+    if (line_sensor_checks == 3){
+      Serial.print(left_line_sensor_val);
+      Serial.print('\t');
+      Serial.print(mid_line_sensor_val);
+      Serial.print('\t');
+      Serial.println(right_line_sensor_val);
+      if (left_line_sensor_val == HIGH && mid_line_sensor_val == HIGH && right_line_sensor_val == HIGH){
+        robot_passed_line();
+        line_sensor_state = 0; // Ready for next check
+        line_sensor_checks = 0;
+        line_sensor_time = cur_time + PULSE_LINE_SENSOR_TIME; //add delay before next pulse
+        return;
+      }
+      correction_factor += correction_state;
+      if (left_line_sensor_val == LOW && mid_line_sensor_val == HIGH && right_line_sensor_val == LOW){ //on track
+        line_on_track(cur_time);
+      }
+      if (left_line_sensor_val == HIGH && mid_line_sensor_val == HIGH){ //slightly too far right
+        line_slightly_right();
+      }
+      if (left_line_sensor_val == HIGH && mid_line_sensor_val == LOW){ //too far right
+        line_far_right();
+      }
+      if (right_line_sensor_val == HIGH && mid_line_sensor_val == HIGH){ //slightly too far left
+        line_slightly_left();
+      }
+      if (right_line_sensor_val == HIGH && mid_line_sensor_val == LOW){ //too far left
+        line_far_left();
+      }
+      if (robot_direction == 1) {start_robot_forward();}
+      else {start_robot_backward();}
+      line_sensor_time = cur_time + PULSE_LINE_SENSOR_TIME; //add delay before next pulse
       line_sensor_state = 0; // Ready for next check
-      line_sensor_time += PULSE_LINE_SENSOR_TIME; //add delay before next pulse
-      return;
+      line_sensor_checks = 0;
     }
-    correction_factor += correction_state;
-    if (left_val == LOW && mid_val == HIGH && right_val == LOW){ //on track
-      line_on_track(cur_time);
-    }
-    if (left_val == HIGH && mid_val == HIGH){ //slightly too far right
-      line_slightly_right();
-    }
-    if (left_val == HIGH && mid_val == LOW){ //too far right
-      line_far_right();
-    }
-    if (right_val == HIGH && mid_val == HIGH){ //slightly too far left
-      line_slightly_left();
-    }
-    if (right_val == HIGH && mid_val == LOW){ //too far left
-      line_far_left();
-    }
-  if (robot_direction == 1) {start_robot_forward();}
-  else {start_robot_backward();}
-  line_sensor_state = 0; // Ready for next check
-  line_sensor_time += PULSE_LINE_SENSOR_TIME; //add delay before next pulse
   }
 }
 
@@ -1122,7 +1198,11 @@ void normalize_orient(){
 
 
 void test(){
-  start_robot_forward();
+  //start_robot_straight_backward();
+  delay(500);
+  start_robot_counterclockwise();
+  delay(1000000);
+  start_robot_straight_forward();
   while (1){
     unsigned long cur_time = micros();
     check_line_sensors(cur_time);

@@ -11,16 +11,16 @@ void setup(){
 }
 
 /*void loop(){
-  int count = 160;
-  int flag = 1;
+  int count = 0;
+  int flag = 0; //0 counts up, 1 counts down
   while (1){
     myServo.write(count);
-    if (flag == 0) count += 5;
-    else count -= 5;
-    delay(1000);
+    if (flag == 0) count += 10;
+    else count -= 10;
+    delay(3000);
     Serial.println(count);
-    if (count == 160) flag = 1;
-    if (count == 130) flag = 0;
+    if (count == 180) flag = 1;
+    if (count == 0) flag = 0;
   }
   angle = 199;
   myServo.write(angle);
@@ -31,8 +31,8 @@ void setup(){
 }*/
 
 void loop(){
-  myServo.write(170);
-  delay(3000);
-  //myServo.write(135);
-  delay(5000);
+  myServo.write(130);
+  delay(2000);
+  myServo.write(100);
+  delay(2000);
 }
