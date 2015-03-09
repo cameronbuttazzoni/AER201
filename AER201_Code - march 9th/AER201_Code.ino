@@ -25,7 +25,6 @@ Version Control:
                 - Implemented moving to any coordinate on the gameboard, going to any line and 90 degree turns, aligning with gameboard, placing gameball, picking up gameball
             1.8:
                 - Organized code into sections
-                - Changed number of line sensors from 3 to 5
                       
 
 Need to Change List:
