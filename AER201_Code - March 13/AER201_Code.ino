@@ -26,8 +26,6 @@ Version Control:
             1.8:
                 - Organized code into sections
                 - Changed number of line sensors from 3 to 5
-            1.9:
-                - Change line following algorithm depending on whether driving forward or backwards
                       
 
 Need to Change List:
@@ -218,7 +216,7 @@ unsigned int next_ball_column; //holds the column to play the next ball into?
 unsigned int next_hopper; //holds the next hopper to get a ball from
 int left_wheel_speed = 255; //speed of left wheel
 int right_wheel_speed = 255; //speed of right wheel
-int correction_state = 0; //0 = no correction, 1 is turning right, 2 turning hard right, -1 is turning left, -2 is turning hard left
+int correction_state = 0; //0 = no correction, 1 correct when "slightly off course", 2 correct when "far off course", pos is robot going right, neg is left (so correct opposite this)
 int correction_factor = 0; //Indicates the degree of line correction the robot has experienced
 int off_track_flag = 0; //has value of 1 if last line check was off the line
 unsigned long on_track_time = 0; //records the last time the robot was on track
@@ -282,7 +280,6 @@ void robot_turn_up(); //turn the robot so its orientation is 0
 void normalize_orient(); //sets robot_orient to a value from -pi to pi
 void update_line_sensor_vals(unsigned long cur_time);
 void check_line_following(unsigned long cur_time); //determine whether line sensor values are on line/passing line/off line. Already need to be updated
-void robot_is_lost(); //while line following, main, left, mid, right sensors all get off line!!!
 
 //Main Functions
 void main_setup(); //main program setup code
@@ -570,29 +567,56 @@ void check_line_sensors(unsigned long cur_time){ // CURTIME in MICROSECONDS
 void update_line_sensor_vals(unsigned long cur_time){
   if (line_sensor_state == 0){ //Send out pulse from the line sensors
     send_line_sensor_pulse(); //send pulse
-    line_sensor_checks = -1; //will add 1 later to make it the required 0
+    line_sensor_checks = 0;
     line_sensor_time = cur_time + line_sensor_delay[line_sensor_checks]; //update time to check the sensors
     line_sensor_state = line_sensor_order[line_sensor_checks]; //set state to check for the colours measured
   }
-  if (line_sensor_state == 1){
-    left_line_sensor_val = digitalRead(LEFT_LINE_SENSOR_PIN);
-  }
-  if (line_sensor_state == 2){
-    mid_line_sensor_val = digitalRead(MID_LINE_SENSOR_PIN);
-  }
-  if (line_sensor_state == 3){
-    right_line_sensor_val = digitalRead(RIGHT_LINE_SENSOR_PIN);
-  }
-  if (line_sensor_state == 4){
-    main_line_sensor_val = digitalRead(MAIN_LINE_SENSOR_PIN);
-  }
-  if (line_sensor_state == 5){
-    side_line_sensor_val = digitalRead(SIDE_LINE_SENSOR_PIN);
-  }
-  line_sensor_checks += 1;
-  if (line_sensor_checks < NUM_LINE_SENSORS){
-    line_sensor_time = cur_time + line_sensor_delay[line_sensor_checks];
-    line_sensor_state = line_sensor_order[line_sensor_checks];
+  else { //Check values recorded by the line sensors
+    if (line_sensor_state == 1){
+      left_line_sensor_val = digitalRead(LEFT_LINE_SENSOR_PIN);
+      line_sensor_checks += 1;
+      if (line_sensor_checks < NUM_LINE_SENSORS){
+        line_sensor_time = cur_time + line_sensor_delay[line_sensor_checks];
+        line_sensor_state = line_sensor_order[line_sensor_checks];
+      }
+      return;
+    }
+    if (line_sensor_state == 2){
+      mid_line_sensor_val = digitalRead(MID_LINE_SENSOR_PIN);
+      line_sensor_checks += 1;
+      if (line_sensor_checks < NUM_LINE_SENSORS){
+        line_sensor_time = cur_time + line_sensor_delay[line_sensor_checks];
+        line_sensor_state = line_sensor_order[line_sensor_checks];
+      }
+      return;
+    }
+    if (line_sensor_state == 3){
+      right_line_sensor_val = digitalRead(RIGHT_LINE_SENSOR_PIN);
+      line_sensor_checks += 1;
+      if (line_sensor_checks < NUM_LINE_SENSORS){
+        line_sensor_time = cur_time + line_sensor_delay[line_sensor_checks];
+        line_sensor_state = line_sensor_order[line_sensor_checks];
+      }
+      return;
+    }
+    if (line_sensor_state == 4){
+      main_line_sensor_val = digitalRead(MAIN_LINE_SENSOR_PIN);
+      line_sensor_checks += 1;
+      if (line_sensor_checks < NUM_LINE_SENSORS){
+        line_sensor_time = cur_time + line_sensor_delay[line_sensor_checks];
+        line_sensor_state = line_sensor_order[line_sensor_checks];
+      }
+      return;
+    }
+    if (line_sensor_state == 5){
+      side_line_sensor_val = digitalRead(SIDE_LINE_SENSOR_PIN);
+      line_sensor_checks += 1;
+      if (line_sensor_checks < NUM_LINE_SENSORS){
+        line_sensor_time = cur_time + line_sensor_delay[line_sensor_checks];
+        line_sensor_state = line_sensor_order[line_sensor_checks];
+      }
+      return;
+    }
   }
 }
 
@@ -616,47 +640,19 @@ void check_line_following(unsigned long cur_time){
   }
   correction_factor += correction_state;
   if (left_line_sensor_val == LOW && mid_line_sensor_val == HIGH && right_line_sensor_val == LOW && main_line_sensor_val == HIGH){ //on track
-    if (robot_direction == 1){
-      line_on_track_forward(cur_time);
-    }
-    if (robot_direction == -1){
-      line_on_track_backward(cur_time);
-    }
+    line_on_track(cur_time);
   }
   if (left_line_sensor_val == HIGH && mid_line_sensor_val == HIGH && right_line_sensor_val == LOW){ //slightly too far right
-    if (robot_direction == 1){
-      line_slightly_right_forward();
-    }
-    if (robot_direction == -1){
-      line_slightly_right_backward();
-    }
+    line_slightly_right();
   }
   if (left_line_sensor_val == HIGH && mid_line_sensor_val == LOW && right_line_sensor_val == LOW){ //too far right
-    if (robot_direction == 1){
-      line_far_right_forward();
-    }
-    if (robot_direction == -1){
-      line_far_right_backward();
-    }
+    line_far_right();
   }
   if (right_line_sensor_val == HIGH && mid_line_sensor_val == HIGH && left_line_sensor_val == LOW){ //slightly too far left
-    if (robot_direction == 1){
-      line_slightly_left_forward();
-    }
-    if (robot_direction == -1){
-      line_slightly_left_backward();
-    }
+    line_slightly_left();
   }
   if (right_line_sensor_val == HIGH && mid_line_sensor_val == LOW && left_line_sensor_val == LOW){ //too far left
-    if (robot_direction == 1){
-      line_far_left_forward();
-    }
-    if (robot_direction == -1){
-      line_far_left_backward();
-    }
-  }
-  if (right_line_sensor_val == LOW && mid_line_sensor_val == LOW && left_line_sensor_val == LOW){//robot is lost!!!!
-    robot_is_lost();
+    line_far_left();
   }
   if (robot_direction == 1) {
     start_robot_forward();
@@ -706,38 +702,7 @@ void robot_passed_line(){
   }
 }
 
-void line_on_track_forward(unsigned long cur_time){ //back on track so drive straight again
-  right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
-  left_wheel_speed = LEFT_WHEEL_MAX_SPEED;
-  correction_state = 0;
-  correction_factor = 0;
-}
-
-void line_slightly_left_forward(){ //turn robot right
-  correction_state = 1;
-  right_wheel_speed = RIGHT_WHEEL_MAX_SPEED - MIN_SPEED_CORRECTION_VALUE;
-  left_wheel_speed = LEFT_WHEEL_MAX_SPEED;
-}
-
-void line_slightly_right_forward(){ //turn robot left
-  correction_state = -1;
-  left_wheel_speed = LEFT_WHEEL_MAX_SPEED - MIN_SPEED_CORRECTION_VALUE;
-  right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
-}
-
-void line_far_left_forward(){ //too far left so turn right
-  right_wheel_speed = RIGHT_WHEEL_MAX_SPEED - MAX_SPEED_CORRECTION_VALUE;
-  left_wheel_speed = LEFT_WHEEL_MAX_SPEED;
-  correction_state = 2;
-}
-
-void line_far_right_forward(){ //too far right so turn left
-  left_wheel_speed = LEFT_WHEEL_MAX_SPEED - MAX_SPEED_CORRECTION_VALUE;
-  right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
-  correction_state = -2;
-}
-
-void line_on_track_backward(unsigned long cur_time){ //back on track so drive straight again
+void line_on_track(unsigned long cur_time){
   right_wheel_speed += (int) ((RIGHT_WHEEL_MAX_SPEED - right_wheel_speed) * (1 - 1/ (abs(correction_factor) + 1))); //bring both wheels closer to max speeds
   left_wheel_speed += (int) ((LEFT_WHEEL_MAX_SPEED - left_wheel_speed) * (1 - 1/ (abs(correction_factor) + 1)));
   if (off_track_flag == 1){
@@ -753,7 +718,7 @@ void line_on_track_backward(unsigned long cur_time){ //back on track so drive st
   }
 }
 
-void line_slightly_left_backward(){
+void line_slightly_left(){
   off_track_flag = 1;
   if (correction_factor == 0) correction_factor += correction_state; //prevent div by 0
   if (correction_state == 2){ //coming from being far left
@@ -772,12 +737,12 @@ void line_slightly_left_backward(){
   }
   if (correction_state == 0){
     correction_state = 1;
-    right_wheel_speed = RIGHT_WHEEL_MAX_SPEED - MIN_SPEED_CORRECTION_VALUE;
-    left_wheel_speed = LEFT_WHEEL_MAX_SPEED;
+    left_wheel_speed = LEFT_WHEEL_MAX_SPEED - MIN_SPEED_CORRECTION_VALUE;
+    right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
   }
 }
 
-void line_slightly_right_backward(){
+void line_slightly_right(){
   off_track_flag = 1;
   if (correction_factor == 0) correction_factor += correction_state; //prevent div by 0
   if (correction_state == -2){ //coming from being far right
@@ -801,24 +766,18 @@ void line_slightly_right_backward(){
   }
 }
 
-void line_far_left_backward(){ //too far left
+void line_far_left(){ //too far left
   off_track_flag = 1;
   right_wheel_speed = RIGHT_WHEEL_MAX_SPEED - MAX_SPEED_CORRECTION_VALUE;
-  left_wheel_speed = LEFT_WHEEL_MAX_SPEED;
   correction_state = 2;
   if (correction_factor < 0) correction_factor = 1; //robot thinks its angled right, so reset this so it will think its angled left
 }
 
-void line_far_right_backward(){
+void line_far_right(){
   off_track_flag = 1;
   left_wheel_speed = LEFT_WHEEL_MAX_SPEED - MAX_SPEED_CORRECTION_VALUE;
-  right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
-  correction_state = -2; 
+  correction_state = -2;
   if (correction_factor > 0) correction_factor = -1; //robot thinks its angled left, so reset this so it will think its angled right
-}
-
-void robot_is_lost(){ //robot is lost
-  return;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
