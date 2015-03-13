@@ -47,10 +47,16 @@ Need to Add List:
 //#include <math.h>
 
 //Defined Constants
+
+//INIT CONSTANTS
+#define ROBOT_INITIAL_X 4 //iniital x line the robot starts on
+#define ROBOT_INITIAL_Y 1 //initial y line the robot starts on
+#define ROBOT_INITIAL_ORIENT PI//initial robot orientation
+
 // HOPPER DETECTION
 #define SERIAL_COMM_BOOL 0 //1 if using serial communication, else 0
-#define HOP_DETECT_TRIG_PIN 5 //Hopper detecting distance sensor's trigger pin
-#define HOP_DETECT_ECHO_PIN 6 //Hopper detecting distance sensor's echo pin
+#define HOP_DETECT_TRIG_PIN 0 //Hopper detecting distance sensor's trigger pin
+#define HOP_DETECT_ECHO_PIN 0 //Hopper detecting distance sensor's echo pin
 #define HOP_DETECT_MAX_DIST 70 //Maximum distance values collected (in cm)
 #define HOP_DETECT_MIN_DIST 5 //Minimum distance values polled (in cm), keep > 0
 #define HOP_DETECT_PING_DELAY 50000 //time between pings from hopper detector distance sensor (min 30000) microseconds
@@ -58,6 +64,7 @@ Need to Add List:
 #define HOPPER_DETECT_MAX_ERROR 25 // max difference between leg values that trigger difference
 #define HOPPER_DETETCT_Y_ERROR 2 // distance that counts as the same value when comparing to y_robot
 #define HOPPER_VALUES_IN_ROW 2 //Number of similar values in a row that need to be found
+#define HOPPER_DETECT_INITIAL_X 40 //go to this x value (cm) for the initial hopper detection algorithm
 
 // GAMEFIELD CONSTANTS
 #define NUMBER_OF_RAN_HOPPERS 2 //Number of random hoppers to detect
@@ -73,11 +80,12 @@ Need to Add List:
 #define COLUMN_SEP_DIST 5 //distance from one gameboard column to the next NOT EXACT YET
 
 // WHEEL CONSTANTS
-#define LEFT_IR_PIN A5 //analog pin for the left wheel's IR sensor
-#define RIGHT_IR_PIN 5 //analog pin for the right wheel's IR sensor
+#define LEFT_IR_PIN 0 //analog pin for the left wheel's IR sensor
+#define RIGHT_IR_PIN 0 //analog pin for the right wheel's IR sensor
 #define WHEEL_IR_DELAY 15000 //time between checks for the wheel IR sensors MICROSECONDS
 #define WHEEL_CIRCUMFERENCE 15 //circumference of the wheel (in cm)
 #define WHEEL_NUM_HOLES 12 //number of holes in the wheel
+#define POSITION_ERROR 2 //in cm must be within this distance for position checks MAKE SMALLER THEN MIN ENCODER CHANGE
 
 // ROBOT DIMENSIONS
 #define ROBOT_WIDTH 10 //half the robot width in cm
@@ -89,12 +97,12 @@ Need to Add List:
 #define ROBOT_BALL_DROP_Y_DIST 5 //the number of cm the ball is from the wheel axis in direction parallel to wheel axis
 
 // MOTOR CONSTANTS
-#define RIGHT_WHEEL_ENABLE_PIN 10 //enable the right wheel motor
+#define RIGHT_WHEEL_ENABLE_PIN 6 //enable the right wheel motor
 #define LEFT_WHEEL_ENABLE_PIN 5 //enable the left wheel motor
-#define LEFT_FORWARD_PIN 6 //Set to high to move left wheel forward
-#define LEFT_BACKWARD_PIN 7 //Set to high to move left wheel backward
-#define RIGHT_FORWARD_PIN 9 //set to high to move right wheel forward
-#define RIGHT_BACKWARD_PIN 8 //set to high to move right wheel backward
+#define LEFT_FORWARD_PIN 10 //Set to high to move left wheel forward
+#define LEFT_BACKWARD_PIN 9 //Set to high to move left wheel backward
+#define RIGHT_FORWARD_PIN 13 //set to high to move right wheel forward
+#define RIGHT_BACKWARD_PIN 12 //set to high to move right wheel backward
 #define LEFT_WHEEL_MAX_SPEED 255 //max of 255
 #define RIGHT_WHEEL_MAX_SPEED 255 //max of 255
 #define LEFT_WHEEL_TURN_SPEED 255 //max of 255
@@ -104,9 +112,9 @@ Need to Add List:
 
 // LINE SENSORS
 #define NUM_LINE_SENSORS 5 //number of line sensors
-#define LEFT_LINE_SENSOR_PIN 2 //left line detecting black/white IR sensor pin
-#define MID_LINE_SENSOR_PIN 3 //middle line detecting black/white IR sensor pin
-#define RIGHT_LINE_SENSOR_PIN 4 //right line detecting black/white IR sensor pin
+#define LEFT_LINE_SENSOR_PIN 0 //left line detecting black/white IR sensor pin
+#define MID_LINE_SENSOR_PIN 0 //middle line detecting black/white IR sensor pin
+#define RIGHT_LINE_SENSOR_PIN 0 //right line detecting black/white IR sensor pin
 #define MAIN_LINE_SENSOR_PIN 0 //the line sensor keeping track of in between the wheels, at very center of robot
 #define SIDE_LINE_SENSOR_PIN 0 //line sensor on RIGHT/LEFT side of robot
 #define CHECK_LINE_SENSOR_TIME 450 //MICROSECONDS since the line sensors start to check for black/white use 750
@@ -120,8 +128,8 @@ Need to Add List:
 #define ROBOT_TURN_UP_ERROR 0.05 //radians, make small
 
 // BALL RELEASE AND PICKUP CONSTANTS
-#define BALL_GRAB_FAN_PIN 4 //pin that controls the fan to suck up balls
-#define BALL_RELEASE_SERVO_PIN 6 //pin that controls the servo motor to release the ball
+#define BALL_GRAB_FAN_PIN 0 //pin that controls the fan to suck up balls
+#define BALL_RELEASE_SERVO_PIN 0 //pin that controls the servo motor to release the ball
 #define BALL_SUCTION_ON_TIME 5000 //amount of time the vacuum sucks for when picking up a ball MILLISECONDS
 #define BALL_SUCTION_OFF_TIME 5000 //amount of time the robot delays for after turning off the fan MILLISECONDS
 #define BALL_RELEASE_SERVO_INITIAL_VAL 136 //value for when the servo is closed
@@ -205,7 +213,6 @@ unsigned long line_sensor_time = 0; //holds time of the next check of the line s
 int line_sensor_state = 0; //if 0 need to turn on line sensor reflect, if 1 need to check for colour
 int prev_ir_left = 0; //stores the last value measured by the left wheel IR
 int prev_ir_right = 0; //stores the last value measured by the right wheel IR
-float initial_orient_robot; // holds the initial orientation value recorded from the compass
 int robot_direction; //1 if moving forward, -1 if moving backward, 2 if turning clockwise, -2 counterclockwise
 float x_robot; // holds robot's current x-axis location
 float y_robot; // holds robot's current y-axis location
@@ -216,8 +223,8 @@ Hopper hoppers[NUMBER_OF_HOPPERS]; // Saves the four game field hopper structure
 int gameboard[NUMBER_BOARD_COLUMNS][NUMBER_BOARD_ROWS] = {0}; // 0 = no ball, 1 = our ball, 2 = their ball, 3 = probably our ball, 4 = probably their ball
 unsigned int next_ball_column; //holds the column to play the next ball into?
 unsigned int next_hopper; //holds the next hopper to get a ball from
-int left_wheel_speed = 255; //speed of left wheel
-int right_wheel_speed = 255; //speed of right wheel
+int left_wheel_speed = LEFT_WHEEL_MAX_SPEED; //speed of left wheel
+int right_wheel_speed = RIGHT_WHEEL_MAX_SPEED; //speed of right wheel
 int correction_state = 0; //0 = no correction, 1 is turning right, 2 turning hard right, -1 is turning left, -2 is turning hard left
 int correction_factor = 0; //Indicates the degree of line correction the robot has experienced
 int off_track_flag = 0; //has value of 1 if last line check was off the line
@@ -231,6 +238,7 @@ int robot_on_line = 1; //keeps track if the robot was on line from the last poll
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void setup_pins();
+void setup_consts();
 int detect_hoppers(); // detect hopper routine. Goes to initial position to left of hoppers then moves right and scans
 void detect_hoppers_error(int error);
 void update_location(unsigned long cur_time);
@@ -264,7 +272,9 @@ void start_robot_straight_backward(); //drive full speed straight backwards
 void start_robot_clockwise(); //turn on wheels to turn clockwise
 void start_robot_counterclockwise(); //turn on wheels to turn counterclockwise
 void robot_quarter_turn_clockwise(); //turns clockwise until the line sensors all match on a line
+void robot_quarter_turn_clockwise_inaccurate(); //turns clockwise until the line sensors all match on a line, less accurate
 void robot_quarter_turn_counterclockwise(); //turns counterclockwise until the line sensors all match on a line
+void robot_quarter_turn_counterclockwise_inaccurate(); //turns counterclockwise until the line sensors all match on a line
 void robot_drive_til_lines(int lines, int direct);
 void check_line_sensors(unsigned long cur_time); //checks the values from line sensors, know if on line and if passing lines
 void send_line_sensor_pulse(); //send pulse of light from the line sensors
@@ -306,7 +316,7 @@ void gameplay_strategy();
 
 void setup(){
   setup_pins();
-  test_fan();
+  test_line_following();
   delay(100000);
   main_setup();
 }
@@ -325,19 +335,25 @@ void setup_pins(){
   pinMode(LEFT_FORWARD_PIN, OUTPUT);
   pinMode(LEFT_BACKWARD_PIN, OUTPUT);
   pinMode(BALL_GRAB_FAN_PIN, OUTPUT);
-  //digitalWrite(BALL_GRAB_FAN_PIN, HIGH); //high means the fan is not on
-  //pinMode(LEFT_IR_PIN, INPUT); 
-  //pinMode(RIGHT_IR_PIN, INPUT);
+  digitalWrite(BALL_GRAB_FAN_PIN, HIGH); //high means the fan is not on
+  pinMode(LEFT_IR_PIN, INPUT); 
   fan_servo.attach(BALL_RELEASE_SERVO_PIN);
   delay(100);
   fan_servo.write(BALL_RELEASE_SERVO_INITIAL_VAL);
-  delay(100);
-  pinMode(BALL_GRAB_FAN_PIN, OUTPUT);
+  delay(1000);
+}
+
+void setup_consts(){
+  x_line_robot = ROBOT_INITIAL_X;
+  x_robot = ROBOT_INITIAL_X * LINE_SEP_DIST;
+  y_line_robot = ROBOT_INITIAL_Y;
+  y_robot = ROBOT_INITIAL_Y * LINE_SEP_DIST;
+  robot_orient = ROBOT_INITIAL_ORIENT;
 }
 
 void main_setup(){
+  setup_consts();
   int error_check; // Check if any routines don't run as expected. Return 0 if Routine runs error free
-  compass_init(); // Get the initial orientation of the robot in the gameboard  
   init_hoppers(); // create structures for the hoppers
   error_check = detect_hoppers(); // Call routine to find position and orientation of hoppers
   if (error_check != 0){ detect_hoppers_error(error_check);} // In event of failure, call backup routine
@@ -449,6 +465,22 @@ void robot_quarter_turn_clockwise(){ //the robot turns 90 degrees clockwise, mus
   robot_orient += PI_OVER_TWO - abs(robot_orient - ((int) (robot_orient / PI_OVER_TWO) * PI_OVER_TWO));
 }
 
+void robot_quarter_turn_clockwise_inaccurate(){ //the robot turns 90 degrees clockwise, must be starting on a line, less accurate
+  start_robot_clockwise();
+  unsigned long cur_time = micros();
+  int check = 1;
+  while (check != 0){ //need to get off of the initial line
+    check = check_line_sensors_on_line(cur_time); 
+    cur_time = micros();
+  }
+  while (check != 1){
+    check = check_line_sensors_on_line(cur_time); //keep turning until the line sensors all on a line
+    cur_time = micros();
+  }
+  stop_robot_motion();
+  robot_orient += PI_OVER_TWO - abs(robot_orient - ((int) (robot_orient / PI_OVER_TWO) * PI_OVER_TWO));
+}
+
 void robot_quarter_turn_counterclockwise(){ //the robot turns 90 degrees clockwise, must be starting on a line intersection
   start_robot_counterclockwise();
   int check = 1;
@@ -459,6 +491,22 @@ void robot_quarter_turn_counterclockwise(){ //the robot turns 90 degrees clockwi
   }
   while (check != 1){
     check = check_line_sensors_on_line_turn(cur_time); //keep turning until the line sensors all on a line
+    cur_time = micros();
+  }
+  stop_robot_motion();
+  robot_orient -= (robot_orient - abs(((int) (robot_orient / PI_OVER_TWO) * PI_OVER_TWO)));
+}
+
+void robot_quarter_turn_counterclockwise_inaccurate(){ //the robot turns 90 degrees clockwise, must be starting on a line, less accurate
+  start_robot_counterclockwise();
+  int check = 1;
+  unsigned long cur_time = micros();
+  while (check != 0){ //need to get off of the initial line, checks for 2 in a row to prevent error
+    check = check_line_sensors_on_line(cur_time); 
+    cur_time = micros();
+  }
+  while (check != 1){
+    check = check_line_sensors_on_line(cur_time); //keep turning until the line sensors all on a line
     cur_time = micros();
   }
   stop_robot_motion();
@@ -871,7 +919,7 @@ int check_line_sensors_on_line(unsigned long cur_time){ //return 1 if all MAIN, 
 int check_line_sensors_on_line_turn(unsigned long cur_time){ //return 1 if all MAIN, MID, SIDE line sensors on line, else return 0
   if (cur_time >= line_sensor_time){
     update_line_sensor_vals(cur_time);
-    if (main_line_sensor_val == HIGH && side_line_sensor_val == HIGH && mid_line_sensor_val) return 1;
+    if (main_line_sensor_val == HIGH && side_line_sensor_val == HIGH && mid_line_sensor_val == HIGH) return 1;
     return 0;
   }
   else{ 
@@ -998,13 +1046,13 @@ void detect_hoppers_error(int error){
 void hopper_detect_initial_pos(){
   // drive the robot to a position on left side of board just outside of the starting area
   // update current location
-  /*x_robot = 0.0;
-  y_robot = 0.0;
-  //drive forward
-  digitalWrite(LEFT_BACKWARD_PIN, LOW);
-  digitalWrite(LEFT_FORWARD_PIN, HIGH);
-  digitalWrite(RIGHT_BACKWARD_PIN, LOW);
-  digitalWrite(RIGHT_FORWARD_PIN, HIGH);*/
+  start_robot_backward();
+  unsigned long cur_time = micros();
+  while ((x_robot - HOPPER_DETECT_INITIAL_X) > POSITION_ERROR){
+    update_location(cur_time);
+    cur_time = micros();
+  }
+  stop_robot_motion();
 }
 
 void init_hoppers(){
@@ -1036,8 +1084,6 @@ void serial_comm(unsigned long cur_time, int prev_dist, int prev_dist2, int cur_
     Serial.print(prev_ir_right);
     Serial.print(',');
     Serial.print(robot_direction);
-    Serial.print(',');
-    Serial.print(initial_orient_robot);
     Serial.print(',');
     Serial.print(x_robot);
     Serial.print(',');
@@ -1082,7 +1128,7 @@ void serial_comm(unsigned long cur_time, int prev_dist, int prev_dist2, int cur_
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void pick_up_game_ball(){
-  fan_servo.write(BALL_RELEASE_SERVO_INITIAL_VAL);
+  //fan_servo.write(BALL_RELEASE_SERVO_INITIAL_VAL);
   digitalWrite(BALL_GRAB_FAN_PIN, LOW); //low means the fan is sucking up the ball
   delay(BALL_SUCTION_ON_TIME);
   digitalWrite(BALL_GRAB_FAN_PIN, HIGH);
@@ -1129,9 +1175,9 @@ void compass_init(){
 }
 
 int get_first_ball(){
-	// Follow path around outside of the board to the random hopper nearest the gameboard
-	// Set this random hopper as the first one to clear
-	return grab_ball();
+  // Follow path around outside of the board to the random hopper nearest the gameboard
+  // Set this random hopper as the first one to clear
+  return grab_ball();
 	
 }
 
@@ -1363,4 +1409,25 @@ void test_fan(){
   delay(2000);
   fan_servo.write(BALL_RELEASE_SERVO_INITIAL_VAL);*/
   //fan_servo.write(BALL_RELEASE_SERVO_FINAL_VAL);
+}
+
+void test_line_following(){
+  setup_consts();
+  start_robot_forward();
+  unsigned long cur_time = micros();
+  while (1){
+    check_line_sensors(cur_time);
+    cur_time = micros();
+  }
+}
+
+void test_locomotion(){
+  x_line_robot= 2;
+  x_robot = 40;
+  y_robot = 2;
+  y_line_robot = 40;
+  robot_orient = 0;
+  unsigned long cur_time = micros();
+  start_robot_forward();
+  robot_go_to_location(5, 2);
 }
