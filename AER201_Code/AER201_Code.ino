@@ -27,7 +27,7 @@ Version Control:
                 - Organized code into sections
                 - Changed number of line sensors from 3 to 5
             1.9:
-                - Change line following algorithm depending on whether driving forward or backwards
+                - Changed line following algorithm depending on whether driving forward or backwards
                       
 
 Need to Change List:
@@ -54,7 +54,7 @@ Need to Add List:
 #define ROBOT_INITIAL_ORIENT PI//initial robot orientation
 
 // HOPPER DETECTION
-#define SERIAL_COMM_BOOL 0 //1 if using serial communication, else 0
+#define SERIAL_COMM_BOOL 1 //1 if using serial communication, else 0
 #define HOP_DETECT_TRIG_PIN 0 //Hopper detecting distance sensor's trigger pin
 #define HOP_DETECT_ECHO_PIN 0 //Hopper detecting distance sensor's echo pin
 #define HOP_DETECT_MAX_DIST 70 //Maximum distance values collected (in cm)
@@ -83,8 +83,8 @@ Need to Add List:
 #define LEFT_IR_PIN 0 //analog pin for the left wheel's IR sensor
 #define RIGHT_IR_PIN 0 //analog pin for the right wheel's IR sensor
 #define WHEEL_IR_DELAY 15000 //time between checks for the wheel IR sensors MICROSECONDS
-#define WHEEL_CIRCUMFERENCE 15 //circumference of the wheel (in cm)
-#define WHEEL_NUM_HOLES 12 //number of holes in the wheel
+#define WHEEL_CIRCUMFERENCE 28.3 //circumference of the wheel (in cm)
+#define WHEEL_NUM_HOLES 18 //number of holes in the wheel
 #define POSITION_ERROR 2 //in cm must be within this distance for position checks MAKE SMALLER THEN MIN ENCODER CHANGE
 
 // ROBOT DIMENSIONS
@@ -112,20 +112,22 @@ Need to Add List:
 
 // LINE SENSORS
 #define NUM_LINE_SENSORS 5 //number of line sensors
-#define LEFT_LINE_SENSOR_PIN 0 //left line detecting black/white IR sensor pin
-#define MID_LINE_SENSOR_PIN 0 //middle line detecting black/white IR sensor pin
-#define RIGHT_LINE_SENSOR_PIN 0 //right line detecting black/white IR sensor pin
-#define MAIN_LINE_SENSOR_PIN 0 //the line sensor keeping track of in between the wheels, at very center of robot
-#define SIDE_LINE_SENSOR_PIN 0 //line sensor on RIGHT/LEFT side of robot
+#define LEFT_LINE_SENSOR_PIN 8 //left line detecting black/white IR sensor pin
+#define MID_LINE_SENSOR_PIN 7 //middle line detecting black/white IR sensor pin
+#define RIGHT_LINE_SENSOR_PIN 3 //right line detecting black/white IR sensor pin
+#define MAIN_LINE_SENSOR_PIN 2 //the line sensor keeping track of in between the wheels, at very center of robot
+#define SIDE_LINE_SENSOR_PIN 11 //line sensor on RIGHT/LEFT side of robot
 #define CHECK_LINE_SENSOR_TIME 450 //MICROSECONDS since the line sensors start to check for black/white use 750
-#define PULSE_LINE_SENSOR_TIME 100000 //send a pulse every CHECK_LINE_SENSOR_TIME + PULSE_LINE_SENSOR_TIME MICROSECONDS
+#define PULSE_LINE_SENSOR_TIME 50000 //send a pulse every CHECK_LINE_SENSOR_TIME + PULSE_LINE_SENSOR_TIME MICROSECONDS
 #define LINE_SENSOR_DELAY 10 //delay in milliseconds between checks to the line sensors NOT USED
 #define LINE_PASS_ANGLE_ERROR 0.5//angle in radians must be within for passing lines to register position updates
 #define LINE_POSITION_ERROR 5 //error in position when going over line in cm
 #define GOOD_ON_TRACK_TIME 2000000 //microseconds that the robot should be on the line for
-#define MIN_SPEED_CORRECTION_VALUE 10 //minimum value to change wheel speed by when veering off course
+#define MIN_SPEED_CORRECTION_VALUE 15 //minimum value to change wheel speed by when veering off course
 #define MAX_SPEED_CORRECTION_VALUE 40 //max value to change wheel speed for slight off course
 #define ROBOT_TURN_UP_ERROR 0.05 //radians, make small
+#define ROBOT_ON_LINE_ERROR 3 //number of checks after line before we start checking if we passed line again
+#define ROBOT_ON_LINE_TURN_ERROR 8 //number of checks of 0 before we check for line
 
 // BALL RELEASE AND PICKUP CONSTANTS
 #define BALL_GRAB_FAN_PIN 0 //pin that controls the fan to suck up balls
@@ -138,6 +140,7 @@ Need to Add List:
 #define RELEASE_BALL_RESET_DELAY 2000 //delay time to reset the servo after placing a ball in MILLISECONDS
 #define RELEASE_BALL_Y_VALUE 165 //y_robot for when the robot is aligned to the game board
 #define RELEASE_BALL_X_VALUE 50 //should be greater than 40
+#define FIRST_HOPPER_NUM 3 // the very first ball is from this hopper
 
 // OTHER CONSTANTS
 #define GAME_BOARD_LEFT_Y 8 //when navigating to the gameboard, go to this Y-coordinate if on left half of board
@@ -198,8 +201,8 @@ typedef struct
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 const int column_locations[] = {65, 70, 75, 80, 85, 90, 95}; //stores the x-coordinates of each of the gameboard columns WRONG
-const int line_sensor_order[] = {2, 3, 1, 4, 5}; //1 is left sensor, 2 is middle sensor, 3 is right sensor, 4 is main sensor, 5 is side sensor
-const int line_sensor_delay[] = {700, 100, 250, 0, 0}; //cumulative delay, must be in order from smallest to largest 
+const int line_sensor_order[] = {5, 2, 3, 1, 4}; //1 is left sensor, 2 is middle sensor, 3 is right sensor, 4 is main sensor, 5 is side sensor
+const int line_sensor_delay[] = {400, 50, 0, 0, 0}; //cumulative delay, must be in order from smallest to largest 
 int line_sensor_checks = 0;
 int left_line_sensor_val = HIGH; //last measured value of each line sensor
 int mid_line_sensor_val = HIGH;
@@ -230,7 +233,7 @@ int correction_factor = 0; //Indicates the degree of line correction the robot h
 int off_track_flag = 0; //has value of 1 if last line check was off the line
 unsigned long on_track_time = 0; //records the last time the robot was on track
 Servo fan_servo;
-int robot_on_line = 1; //keeps track if the robot was on line from the last poll, 1 if was on line, else 0
+int robot_on_line = ROBOT_ON_LINE_ERROR; //keeps track if the robot was on line from the last poll, >0 if was on line, else 0
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -316,7 +319,9 @@ void gameplay_strategy();
 
 void setup(){
   setup_pins();
-  test_line_following();
+  stop_robot_motion();
+  delay(3000);
+  test_locomotion();
   delay(100000);
   main_setup();
 }
@@ -468,7 +473,14 @@ void robot_quarter_turn_clockwise(){ //the robot turns 90 degrees clockwise, mus
 void robot_quarter_turn_clockwise_inaccurate(){ //the robot turns 90 degrees clockwise, must be starting on a line, less accurate
   start_robot_clockwise();
   unsigned long cur_time = micros();
-  int check = 1;
+  int check = 0;
+  int flag = 0;
+  while (flag < ROBOT_ON_LINE_TURN_ERROR){ //need to get off of the initial line
+    check = check_line_sensors_on_line(cur_time); 
+    cur_time = micros();
+    if (check != 2) flag++;
+  }
+  check = 1;
   while (check != 0){ //need to get off of the initial line
     check = check_line_sensors_on_line(cur_time); 
     cur_time = micros();
@@ -485,7 +497,7 @@ void robot_quarter_turn_counterclockwise(){ //the robot turns 90 degrees clockwi
   start_robot_counterclockwise();
   int check = 1;
   unsigned long cur_time = micros();
-  while (check != 0){ //need to get off of the initial line, checks for 2 in a row to prevent error
+  while (check != 0){ //need to get off of the initial line, checks for 1 in a row to prevent error
     check = check_line_sensors_on_line_turn(cur_time); 
     cur_time = micros();
   }
@@ -555,7 +567,7 @@ void robot_go_to_location(int final_x, int final_y){
 void robot_drive_horiz(int line){ //robot drives to the line specified by line
   normalize_orient();
   while (abs(robot_orient - PI_OVER_TWO) > LINE_PASS_ANGLE_ERROR && abs(robot_orient + PI_OVER_TWO) > LINE_PASS_ANGLE_ERROR){ //not facing left/right
-    robot_quarter_turn_clockwise();
+    robot_quarter_turn_clockwise_inaccurate();
   }
   if (line > x_line_robot){ //need to go right
       if(abs(robot_orient - PI_OVER_TWO) < LINE_PASS_ANGLE_ERROR){ //facing to right so drive forward
@@ -599,6 +611,10 @@ void robot_drive_vertic(int line){ //robot drives to the line specified by line
       }
       robot_drive_til_line(line, 1);  //drive to left line
     }
+}
+
+void get_ball(){
+  //get ball specified
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -645,22 +661,38 @@ void update_line_sensor_vals(unsigned long cur_time){
 }
 
 void check_line_following(unsigned long cur_time){
-  /*Serial.print(left_line_sensor_val);
+  Serial.print(left_line_sensor_val);
   Serial.print('\t');
   Serial.print(mid_line_sensor_val);
   Serial.print('\t');
-  Serial.println(right_line_sensor_val);*/
+  Serial.print(right_line_sensor_val);
+  Serial.print('\t');
+  Serial.print(main_line_sensor_val);
+  Serial.print('\t');
+  Serial.println(side_line_sensor_val);
+  //
+  /*Serial.print(cur_time);
+  Serial.print('\t');
+  Serial.print(side_line_sensor_val);
+  Serial.print('\t');
+  Serial.print(y_line_robot);
+  Serial.print('\t');
+  Serial.println(robot_on_line);*/
   line_sensor_state = 0; // Ready for next check
   line_sensor_checks = 0;
   line_sensor_time = cur_time + PULSE_LINE_SENSOR_TIME; //add delay before next pulse
-  if (side_line_sensor_val == HIGH && main_line_sensor_val == HIGH){ // robot passes a line
-    if (robot_on_line != 1){ 
+  //if (side_line_sensor_val == HIGH && main_line_sensor_val == HIGH){ // robot passes a line
+  if (side_line_sensor_val == HIGH){ // robot passes a line
+    if (robot_on_line == 0){ 
       robot_passed_line(); //passed line
-      robot_on_line = 1;
+      robot_on_line = ROBOT_ON_LINE_ERROR;
     }
     else{ 
-      robot_on_line = 0;
+      robot_on_line = ROBOT_ON_LINE_ERROR;
     }
+  }
+  else {
+    if (robot_on_line > 0) robot_on_line -= 1;
   }
   correction_factor += correction_state;
   if (left_line_sensor_val == LOW && mid_line_sensor_val == HIGH && right_line_sensor_val == LOW && main_line_sensor_val == HIGH){ //on track
@@ -908,8 +940,21 @@ void update_location(unsigned long cur_time){
 int check_line_sensors_on_line(unsigned long cur_time){ //return 1 if all MAIN, SIDE line sensors on line, else return 0
   if (cur_time >= line_sensor_time){
     update_line_sensor_vals(cur_time);
-    if (main_line_sensor_val == HIGH && side_line_sensor_val == HIGH) return 1;
-    return 0;
+    if (line_sensor_checks == NUM_LINE_SENSORS){
+      line_sensor_state = 0; //ready for new check
+      Serial.print(left_line_sensor_val);
+  Serial.print('\t');
+  Serial.print(mid_line_sensor_val);
+  Serial.print('\t');
+  Serial.print(right_line_sensor_val);
+  Serial.print('\t');
+  Serial.print(main_line_sensor_val);
+  Serial.print('\t');
+  Serial.println(side_line_sensor_val);
+      if (side_line_sensor_val == HIGH) return 1;
+      return 0;
+    }
+    return 2;
   }
   else{
     return 2; //didnt check
@@ -919,8 +964,11 @@ int check_line_sensors_on_line(unsigned long cur_time){ //return 1 if all MAIN, 
 int check_line_sensors_on_line_turn(unsigned long cur_time){ //return 1 if all MAIN, MID, SIDE line sensors on line, else return 0
   if (cur_time >= line_sensor_time){
     update_line_sensor_vals(cur_time);
-    if (main_line_sensor_val == HIGH && side_line_sensor_val == HIGH && mid_line_sensor_val == HIGH) return 1;
-    return 0;
+    if (line_sensor_checks == NUM_LINE_SENSORS){
+      if (main_line_sensor_val == HIGH && side_line_sensor_val == HIGH && mid_line_sensor_val == HIGH) return 1;
+      return 0;
+    }
+    return 2;
   }
   else{ 
     return 2; //didnt check since not at right time
@@ -1175,8 +1223,7 @@ void compass_init(){
 }
 
 int get_first_ball(){
-  // Follow path around outside of the board to the random hopper nearest the gameboard
-  // Set this random hopper as the first one to clear
+  next_hopper = FIRST_HOPPER_NUM;
   return grab_ball();
 	
 }
@@ -1422,12 +1469,14 @@ void test_line_following(){
 }
 
 void test_locomotion(){
-  x_line_robot= 2;
-  x_robot = 40;
-  y_robot = 2;
-  y_line_robot = 40;
+  x_line_robot = 4;
+  x_robot = 20;
+  y_robot = 20;
+  y_line_robot = 1;
   robot_orient = 0;
-  unsigned long cur_time = micros();
-  start_robot_forward();
-  robot_go_to_location(5, 2);
+  robot_go_to_location(4, 2);
+  robot_go_to_location(1, 2);
+  robot_go_to_location(1, 8);
+  robot_go_to_location(3, 8);
+  //robot_drive_vertic(5);
 }

@@ -1,4 +1,4 @@
-#define LEFT_IR_PIN A4
+#define LEFT_IR_PIN A0
 #define RIGHT_IR_PIN A5
 
 int cur_val;
