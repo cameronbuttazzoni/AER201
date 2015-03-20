@@ -1,9 +1,9 @@
-#define RIGHT_WHEEL_ENABLE_PIN 6 //enable the left wheel motor
-#define LEFT_WHEEL_ENABLE_PIN 5 //enable the right wheel motor
-#define LEFT_FORWARD_PIN 10 //Set to high to move right wheel forward
-#define LEFT_BACKWARD_PIN 9 //Set to high to move right wheel backward
-#define RIGHT_FORWARD_PIN 13 //set to high to move left wheel forward
-#define RIGHT_BACKWARD_PIN 12 //set to high to move left wheel backward
+#define RIGHT_WHEEL_ENABLE_PIN 2 //enable the left wheel motor
+#define LEFT_WHEEL_ENABLE_PIN 3 //enable the right wheel motor
+#define LEFT_FORWARD_PIN 24 //Set to high to move right wheel forward
+#define LEFT_BACKWARD_PIN 22 //Set to high to move right wheel backward
+#define RIGHT_FORWARD_PIN 26 //set to high to move left wheel forward
+#define RIGHT_BACKWARD_PIN 28 //set to high to move left wheel backward
 int right_speed = 255;
 int left_speed = 255;
 void setup(){

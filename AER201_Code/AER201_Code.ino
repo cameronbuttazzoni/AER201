@@ -59,8 +59,8 @@ Need to Add List:
 
 // HOPPER DETECTION
 #define SERIAL_COMM_BOOL 1 //1 if using serial communication, else 0
-#define HOP_DETECT_TRIG_PIN 0 //Hopper detecting distance sensor's trigger pin
-#define HOP_DETECT_ECHO_PIN 0 //Hopper detecting distance sensor's echo pin
+#define HOP_DETECT_TRIG_PIN 53 //Hopper detecting distance sensor's trigger pin
+#define HOP_DETECT_ECHO_PIN 52 //Hopper detecting distance sensor's echo pin
 #define HOP_DETECT_MAX_DIST 70 //Maximum distance values collected (in cm)
 #define HOP_DETECT_MIN_DIST 5 //Minimum distance values polled (in cm), keep > 0
 #define HOP_DETECT_PING_DELAY 50000 //time between pings from hopper detector distance sensor (min 30000) microseconds
@@ -124,11 +124,11 @@ Need to Add List:
 
 // LINE SENSORS
 #define NUM_LINE_SENSORS 5 //number of line sensors
-#define LEFT_LINE_SENSOR_PIN 8 //left line detecting black/white IR sensor pin
-#define MID_LINE_SENSOR_PIN 7 //middle line detecting black/white IR sensor pin
-#define RIGHT_LINE_SENSOR_PIN 3 //right line detecting black/white IR sensor pin
-#define MAIN_LINE_SENSOR_PIN 2 //the line sensor keeping track of in between the wheels, at very center of robot
-#define SIDE_LINE_SENSOR_PIN 11 //line sensor on RIGHT/LEFT side of robot
+#define LEFT_LINE_SENSOR_PIN 45 //left line detecting black/white IR sensor pin
+#define MID_LINE_SENSOR_PIN 47 //middle line detecting black/white IR sensor pin
+#define RIGHT_LINE_SENSOR_PIN 49 //right line detecting black/white IR sensor pin
+#define MAIN_LINE_SENSOR_PIN 51 //the line sensor keeping track of in between the wheels, at very center of robot
+#define SIDE_LINE_SENSOR_PIN 43 //line sensor on RIGHT/LEFT side of robot
 #define CHECK_LINE_SENSOR_TIME 450 //MICROSECONDS since the line sensors start to check for black/white use 750
 #define PULSE_LINE_SENSOR_TIME 50000 //send a pulse every CHECK_LINE_SENSOR_TIME + PULSE_LINE_SENSOR_TIME MICROSECONDS
 #define LINE_SENSOR_DELAY 10 //delay in milliseconds between checks to the line sensors NOT USED
@@ -219,7 +219,7 @@ typedef struct
 
 const int column_locations[] = {65, 70, 75, 80, 85, 90, 95}; //stores the x-coordinates of each of the gameboard columns WRONG
 const int line_sensor_order[] = {5, 2, 3, 1, 4}; //1 is left sensor, 2 is middle sensor, 3 is right sensor, 4 is main sensor, 5 is side sensor
-const int line_sensor_delay[] = {400, 50, 0, 0, 0}; //cumulative delay, must be in order from smallest to largest 
+const int line_sensor_delay[] = {0, 0, 0, 0, 0}; //cumulative delay, must be in order from smallest to largest 
 int line_sensor_checks = 0;
 int left_line_sensor_val = HIGH; //last measured value of each line sensor
 int mid_line_sensor_val = HIGH;
@@ -340,7 +340,7 @@ void setup(){
   setup_pins();
   stop_robot_motion();
   delay(3000);
-  test_locomotion();
+  test_line_following();
   delay(100000);
   main_setup();
 }
@@ -736,8 +736,6 @@ void update_line_sensor_vals(unsigned long cur_time){
   if (line_sensor_state == 0){ //Send out pulse from the line sensors
     send_line_sensor_pulse(); //send pulse
     line_sensor_checks = 0; // number of line sensors we have checked
-    line_sensor_time = cur_time + line_sensor_delay[line_sensor_checks]; //update time to check the sensors
-    line_sensor_state = line_sensor_order[line_sensor_checks]; //set state to check for the colours measured
   }
   if (line_sensor_state == 1){
     left_line_sensor_val = digitalRead(LEFT_LINE_SENSOR_PIN);
@@ -754,13 +752,14 @@ void update_line_sensor_vals(unsigned long cur_time){
   if (line_sensor_state == 5){
     side_line_sensor_val = digitalRead(SIDE_LINE_SENSOR_PIN);
   }
-  line_sensor_checks += 1;
   if (line_sensor_checks < NUM_LINE_SENSORS){
     line_sensor_time = cur_time + line_sensor_delay[line_sensor_checks];
     line_sensor_state = line_sensor_order[line_sensor_checks];
   }
   else line_sensor_state = 0;
+  line_sensor_checks += 1;
 }
+
 
 void check_line_following(unsigned long cur_time){
   Serial.print(left_line_sensor_val);
@@ -1521,6 +1520,7 @@ void test_line_following(){
     check_line_sensors(cur_time);
     cur_time = micros();
   }
+  stop_robot_motion();
 }
 
 void test_locomotion(){
@@ -1530,8 +1530,11 @@ void test_locomotion(){
   y_line_robot = 1;
   robot_orient = 0;
   robot_go_to_location(4, 2);
+  delay(2000);
   robot_go_to_location(1, 2);
+  delay(2000);
   robot_go_to_location(1, 8);
+  delay(2000);
   robot_go_to_location(3, 8);
   //robot_drive_vertic(5);
 }
