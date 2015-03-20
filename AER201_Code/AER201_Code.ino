@@ -108,12 +108,14 @@ Need to Add List:
 #define RIGHT_BACKWARD_PIN 12 //set to high to move right wheel backward
 #define LEFT_WHEEL_MAX_SPEED 255 //max of 255
 #define RIGHT_WHEEL_MAX_SPEED 255 //max of 255
-#define LEFT_WHEEL_TURN_SPEED 255 //max of 255
-#define RIGHT_WHEEL_TURN_SPEED 255 //max of 255
-#define LEFT_WHEEL_GAMEBOARD_SPEED 255 //speed of left wheel when moving along gameboard
-#define RIGHT_WHEEL_GAMEBOARD_SPEED 255 //speed of right wheel when moving along gameboard
+#define LEFT_WHEEL_TURN_SPEED 155 //max of 255
+#define RIGHT_WHEEL_TURN_SPEED 155 //max of 255
+#define LEFT_WHEEL_GAMEBOARD_SPEED 155 //speed of left wheel when moving along gameboard
+#define RIGHT_WHEEL_GAMEBOARD_SPEED 155 //speed of right wheel when moving along gameboard
 #define LEFT_WHEEL_ALIGN_SPEED 100 //speed of left wheel when aligning to the line
 #define RIGHT_WHEEL_ALIGN_SPEED 100 //speed of left wheel when aligning to the line
+#define LEFT_WHEEL_ENCODER_SPEED 130 //speed of the left wheel when using the encoders during orienting on a hopper stage
+#define RIGHT_WHEEL_ENCODER_SPEED 130 //speed of the right wheel when using the encoders during orienting on a hopper stage
 
 // LINE SENSORS
 #define NUM_LINE_SENSORS 5 //number of line sensors
@@ -1045,11 +1047,11 @@ int detect_hoppers(){
   while (1){ //Run until end is reached
     cur_time = micros(); //update current time every loop
     update_location(cur_time); // updates x_robot and y_robot
+    check_line_sensors(cur_time);
     if (cur_time > ping_time){ // send another ping if enough time has passed
       unsigned int ping_record_time = hopper_detector.ping(); //measures time to receive ping
       ping_dist = ping_record_time / US_ROUNDTRIP_CM + (int) y_robot; // ping distance from gamefield bottom
       //Serial communcation
-      if (SERIAL_COMM_BOOL) serial_comm(cur_time, prev_dist, prev_dist2, cur_hopper, flag, ping_dist, count);
       ping_time += HOP_DETECT_PING_DELAY; // add delay before another ping is sent
       if (ping_dist > HOP_DETECT_MAX_DIST) continue; //prevent sonar malfunctions from affecting anything
     }
@@ -1116,6 +1118,7 @@ int detect_hoppers(){
   set_hopper_order();
   return 0;
 }
+
 
 void display_hoppers(){
   stop_robot_motion(); //turn off wheel motors
@@ -1271,7 +1274,11 @@ void serial_comm(unsigned long cur_time, int prev_dist, int prev_dist2, int cur_
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 int orient_on_hopper(){
-  return 0;
+  normalize_orient();
+  if (PI - abs(robot_orient) < LINE_PASS_ANGLE_ERROR) robot_quarter_turn_counterclockwise(); //make robot face towards the right
+  while (abs(robot_orient - PI_OVER_TWO) > LINE_PASS_ANGLE_ERROR){
+    robot_quarter_turn_clockwise();
+  }
 }
 
 void orient_on_hopper_error(int error){
