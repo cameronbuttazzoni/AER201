@@ -2,11 +2,11 @@
 //Outputs via the serial terminal - Lower numbers mean more reflected
 //3000 or more means nothing was reflected.
 
-int left_pin = 8; //connected to digital pin
-int mid_pin = 7;
-int right_pin = 3;
-int main_pin = 2;
-int side_pin = 11;
+int left_pin = 45; //connected to digital pin
+int mid_pin = 47;
+int right_pin = 49;
+int main_pin = 51;
+int side_pin = 43;
 
 void setup(){
   Serial.begin(9600);

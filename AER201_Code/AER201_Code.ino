@@ -40,8 +40,8 @@ Potential Problems List:
     - Only uses one wheel's IR sensor, so assumes both wheels spin at a constant speed
 
 Need to Add List:
-    - Start and end location for Hopper Detection
-    - Movement in hopper Detection
+    - int grab_ball()
+    - end location for Hopper Detection
     - As possible errors are found in function, update their corresponding error handler
     - Add emergency stop interrupt
 
@@ -105,12 +105,12 @@ Need to Add List:
 #define ROBOT_BALL_DROP_Y_DIST 5 //the number of cm the ball is from the wheel axis in direction parallel to wheel axis
 
 // MOTOR CONSTANTS
-#define RIGHT_WHEEL_ENABLE_PIN 6 //enable the right wheel motor
-#define LEFT_WHEEL_ENABLE_PIN 5 //enable the left wheel motor
-#define LEFT_FORWARD_PIN 10 //Set to high to move left wheel forward
-#define LEFT_BACKWARD_PIN 9 //Set to high to move left wheel backward
-#define RIGHT_FORWARD_PIN 13 //set to high to move right wheel forward
-#define RIGHT_BACKWARD_PIN 12 //set to high to move right wheel backward
+#define RIGHT_WHEEL_ENABLE_PIN 2 //enable the right wheel motor
+#define LEFT_WHEEL_ENABLE_PIN 3 //enable the left wheel motor
+#define LEFT_FORWARD_PIN 24 //Set to high to move left wheel forward
+#define LEFT_BACKWARD_PIN 22 //Set to high to move left wheel backward
+#define RIGHT_FORWARD_PIN 26 //set to high to move right wheel forward
+#define RIGHT_BACKWARD_PIN 28 //set to high to move right wheel backward
 #define LEFT_WHEEL_MAX_SPEED 255 //max of 255
 #define RIGHT_WHEEL_MAX_SPEED 255 //max of 255
 #define LEFT_WHEEL_TURN_SPEED 155 //max of 255
@@ -159,6 +159,8 @@ Need to Add List:
 // OTHER CONSTANTS
 #define ROBOT_FOLLOW_LEFT_COLUMN_VAL 1 //go up and down this line when on left side of board
 #define ROBOT_FOLLOW_RIGHT_COLUMN_VAL 7 //go up and down this line when on right side of board
+#define MID_ZONE_TOP_Y 6 // the y line of the top of the middle zone
+#define MID_ZONE_BOT_Y 3 // the y line of the bot of the middle zone
 #define SERIAL_BAUD_RATE 9600 //Serial bits per second
 
 // MATH
@@ -241,7 +243,7 @@ float robot_orient = 0; //holds robot's orientation, 0 is towards gameboard, clo
 Hopper hoppers[NUMBER_OF_HOPPERS]; // Saves the four game field hopper structures
 int hopper_order[4] = {0, 1, 2, 3}; //best order to get the hoppers in
 int gameboard[NUMBER_BOARD_COLUMNS][NUMBER_BOARD_ROWS] = {0}; // 0 = no ball, 1 = our ball, 2 = their ball, 3 = probably our ball, 4 = probably their ball
-unsigned int next_ball_column; //holds the column to play the next ball into?
+unsigned int next_ball_column = 0; //holds the column to play the next ball into?
 unsigned int next_hopper; //holds the next hopper to get a ball from
 int left_wheel_speed = LEFT_WHEEL_MAX_SPEED; //speed of left wheel
 int right_wheel_speed = RIGHT_WHEEL_MAX_SPEED; //speed of right wheel
@@ -591,15 +593,32 @@ void robot_go_to_location(int final_x, int final_y){
     robot_drive_vertic(final_y);
   }
   else{
-    if (final_x < GAMEFIELD_RED_LINE_NUM){ //go left to line x=2 then to correct y then to correct x
-      robot_drive_horiz(ROBOT_FOLLOW_LEFT_COLUMN_VAL);
-      robot_drive_vertic(final_y);
-      robot_drive_horiz(final_x);
+    if (y_line_robot > MID_ZONE_TOP_Y || y_line_robot < MID_ZONE_BOT_Y){ //only need to go horizontally and vertically
+      if (abs(robot_orient) < LINE_PASS_ANGLE_ERROR && final_y > y_line_robot){
+        robot_drive_vertic(final_y);
+        robot_drive_horiz(final_x);
+        return;
+      }
+      if (abs(robot_orient) > PI - LINE_PASS_ANGLE_ERROR && final_y < y_line_robot){
+        robot_drive_vertic(final_y);
+        robot_drive_horiz(final_x);
+      }
+      else {
+        robot_drive_horiz(final_x);
+        robot_drive_vertic(final_y);
+      }
     }
-    else{
-      robot_drive_horiz(ROBOT_FOLLOW_RIGHT_COLUMN_VAL);
-      robot_drive_vertic(final_y);
-      robot_drive_horiz(final_x);
+    else{ //need to go around the middle
+      if (final_x < GAMEFIELD_RED_LINE_NUM){ //go left to line x=2 then to correct y then to correct x
+        robot_drive_horiz(ROBOT_FOLLOW_LEFT_COLUMN_VAL);
+        robot_drive_vertic(final_y);
+        robot_drive_horiz(final_x);
+      }
+      else{
+        robot_drive_horiz(ROBOT_FOLLOW_RIGHT_COLUMN_VAL);
+        robot_drive_vertic(final_y);
+        robot_drive_horiz(final_x);
+      }
     }
   }
   stop_robot_motion();
@@ -1175,8 +1194,12 @@ void hopper_detect_initial_pos(){
     update_location(cur_time);
     cur_time = micros();
   }
+  stop_robot_motion();
   normalize_orient();
-  
+  while (abs(robot_orient + PI_OVER_TWO) > LINE_PASS_ANGLE_ERROR){ //not facing left
+        if (abs(robot_orient) > PI_OVER_TWO) robot_quarter_turn_clockwise();
+        else robot_quarter_turn_counterclockwise();
+      }
   stop_robot_motion();
 }
 
@@ -1386,6 +1409,9 @@ void pre_board_scan_error(int error){
 int game_strategy(){
 	// find best column to place the ball into
   // save to next_ball_column global variable
+  next_ball_column++;
+  next_ball_column = next_ball_column % NUMBER_BOARD_COLUMNS;
+  return 0;
 }
 
 void game_strategy_error(int error){
