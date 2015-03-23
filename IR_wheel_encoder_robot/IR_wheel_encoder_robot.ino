@@ -1,9 +1,9 @@
-#define RIGHT_WHEEL_ENABLE_PIN 6 //enable the left wheel motor
-#define LEFT_WHEEL_ENABLE_PIN 5 //enable the right wheel motor
-#define LEFT_FORWARD_PIN 10 //Set to high to move right wheel forward
-#define LEFT_BACKWARD_PIN 9 //Set to high to move right wheel backward
-#define RIGHT_FORWARD_PIN 13 //set to high to move left wheel forward
-#define RIGHT_BACKWARD_PIN 12 //set to high to move left wheel backward
+#define RIGHT_WHEEL_ENABLE_PIN 2 //enable the left wheel motor
+#define LEFT_WHEEL_ENABLE_PIN 3 //enable the right wheel motor
+#define LEFT_FORWARD_PIN 24 //Set to high to move right wheel forward
+#define LEFT_BACKWARD_PIN 22 //Set to high to move right wheel backward
+#define RIGHT_FORWARD_PIN 26 //set to high to move left wheel forward
+#define RIGHT_BACKWARD_PIN 28 //set to high to move left wheel backward
 #define LEFT_IR_PIN A0
 #define RIGHT_IR_PIN A5
 
@@ -85,7 +85,7 @@ void setup(){
   init_time = millis();
   cur_time = millis();
   last_val = analogRead(LEFT_IR_PIN);
-  if (last_val > 110){ last_val = 1;}
+  if (last_val > 10){ last_val = 1;}
   else last_val = 0;
   setup_pins();
   drive_forward();
@@ -95,7 +95,7 @@ void setup(){
 void loop(){
   while (init_time + 20000 > cur_time){
   cur_val = analogRead(LEFT_IR_PIN);
-  if (cur_val > 110) cur_val = 1;
+  if (cur_val > 10) cur_val = 1;
   else cur_val = 0;
   if (cur_val != last_val){
     last_val = cur_val;
