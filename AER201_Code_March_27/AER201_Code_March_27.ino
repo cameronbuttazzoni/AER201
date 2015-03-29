@@ -137,7 +137,7 @@ Need to Add List:
 #define MAIN_LINE_SENSOR_PIN 51 //the line sensor keeping track of in between the wheels, at very center of robot
 #define SIDE_LINE_SENSOR_PIN 43 //line sensor on RIGHT/LEFT side of robot
 #define CHECK_LINE_SENSOR_TIME 450 //MICROSECONDS since the line sensors start to check for black/white use 750
-#define PULSE_LINE_SENSOR_TIME 5000 //send a pulse every CHECK_LINE_SENSOR_TIME + PULSE_LINE_SENSOR_TIME MICROSECONDS
+#define PULSE_LINE_SENSOR_TIME 50000 //send a pulse every CHECK_LINE_SENSOR_TIME + PULSE_LINE_SENSOR_TIME MICROSECONDS
 #define LINE_SENSOR_DELAY 10 //delay in milliseconds between checks to the line sensors NOT USED
 #define LINE_PASS_ANGLE_ERROR 0.75//angle in radians must be within for passing lines to register position updates
 #define LINE_POSITION_ERROR 5 //error in position when going over line in cm
@@ -248,7 +248,7 @@ const int line_sensor_order[] = {5, 2, 3, 1, 4}; //1 is left sensor, 2 is middle
 const int line_sensor_delay[] = {220, 0, 0, 0, 0}; //cumulative delay, must be in order from smallest to largest 
 const int ldr_wall_vals[] = {10, 10, 10, 10, 10, 10};
 const int ldr_ball_vals[] = {10, 10, 10, 10, 10, 10};
-int ldr_vals[] = {0, 0, 0, 0, 0, 0};
+int ldr_vals[] = {0};
 int line_sensor_checks = 0;
 int left_line_sensor_val = HIGH; //last measured value of each line sensor
 int mid_line_sensor_val = HIGH;
@@ -348,7 +348,7 @@ void normalize_orient(); //sets robot_orient to a value from -pi to pi
 void update_line_sensor_vals(unsigned long cur_time);
 void check_line_following(unsigned long cur_time); //determine whether line sensor values are on line/passing line/off line. Already need to be updated
 void robot_is_lost(); //while line following, main, left, mid, right sensors all get off line!!!
-void align_robot(int prev_direct); //when robot is on line, align it to line
+void align_robot(); //when robot is on line, align it to line
 void update_line_sensors(); // updates the values of all of the line sensors
 void send_hopper_detect_ping(unsigned long cur_time); //send ping and update ping_dist variable
 void send_hopper_orient_ping(unsigned long cur_time);
@@ -382,7 +382,7 @@ void setup(){
   setup_pins();
   stop_robot_motion();
   delay(3000);
-  test_turning();
+  detect_hoppers();
   delay(500000);
   main_setup();
 }
@@ -404,6 +404,7 @@ void setup_pins(){
   pinMode(BALL_GRAB_FAN_CONST_PIN, OUTPUT);
   digitalWrite(BALL_GRAB_FAN_CONST_PIN, HIGH);
   digitalWrite(BALL_GRAB_FAN_PIN, HIGH); //high means the fan is not on
+  pinMode(LEFT_IR_PIN, INPUT); 
   fan_servo.attach(BALL_RELEASE_SERVO_PIN);
   delay(100);
   fan_servo.write(BALL_RELEASE_SERVO_INITIAL_VAL);
@@ -558,7 +559,6 @@ void start_robot_counterclockwise_orient(){
 void robot_quarter_turn_clockwise(){ //the robot turns 90 degrees clockwise, must be starting on a line
   align_robot(2);
   start_robot_clockwise();
-  delay(300);
   unsigned long cur_time = micros();
   int check = 1;
   while (check != 0){ //need to get off of the initial line
@@ -566,12 +566,17 @@ void robot_quarter_turn_clockwise(){ //the robot turns 90 degrees clockwise, mus
     cur_time = micros();
   }
   while (check != 1){
-    check = check_line_sensors_on_line(cur_time); //keep turning until side line sensor on line
+    check = check_line_sensors_on_line(cur_time); //keep turning until the line sensors all on a line
     cur_time = micros();
   }
   stop_robot_motion();
   delay(STOP_MOTION_DELAY);
-  robot_orient += PI_OVER_TWO;
+  normalize_orient(); //put orientation between -pi and pi
+  float new_orient = -1 * PI;
+  while (new_orient <= robot_orient + EPSILON){
+    new_orient += PI_OVER_TWO;
+  }
+  robot_orient = new_orient;
   normalize_orient();
   start_robot_counterclockwise_align();
   delay(TURN_CORRECTION_DELAY);
@@ -594,7 +599,12 @@ void robot_quarter_turn_counterclockwise(){ //the robot turns 90 degrees counter
   }
   stop_robot_motion();
   delay(STOP_MOTION_DELAY);
-  robot_orient -= PI_OVER_TWO;
+  normalize_orient(); //put orientation between -pi and pi
+  float new_orient = PI;
+  while (new_orient > robot_orient - EPSILON){
+    new_orient -= PI_OVER_TWO;
+  }
+  robot_orient = new_orient;
   normalize_orient();
   start_robot_clockwise_align();
   delay(TURN_CORRECTION_DELAY);
@@ -603,56 +613,58 @@ void robot_quarter_turn_counterclockwise(){ //the robot turns 90 degrees counter
 
 void robot_turn_up(){ //turns robot so that it is facing direction 0
   normalize_orient();
-  if (abs(robot_orient - PI) < EPSILON || abs(robot_orient + PI) < EPSILON) robot_quarter_turn_clockwise(); //facing down
-  if (abs(robot_orient + PI_OVER_TWO) < EPSILON){ //facing left
-    robot_quarter_turn_clockwise();
-  }
-  if (abs(robot_orient - PI_OVER_TWO) < EPSILON){ //facing right
-    robot_quarter_turn_counterclockwise();
-  }
+  if (robot_orient >= PI_OVER_TWO + ROBOT_TURN_UP_ERROR) robot_quarter_turn_counterclockwise();
+  if (robot_orient <= -1 * PI_OVER_TWO - ROBOT_TURN_UP_ERROR) robot_quarter_turn_clockwise();
+  if (robot_orient >= ROBOT_TURN_UP_ERROR) robot_quarter_turn_counterclockwise();
+  if (robot_orient <=  -1 * ROBOT_TURN_UP_ERROR) robot_quarter_turn_clockwise();
+  align_robot(2);
 }
 
 void robot_turn_right(){ //turns robot so that it is facing direction PI/2
   normalize_orient();
-  if (abs(robot_orient + PI_OVER_TWO) < EPSILON) robot_quarter_turn_clockwise(); //facing left
-  if (abs(robot_orient) < EPSILON){ //facing up
-    robot_quarter_turn_clockwise();
-  }
-  if (abs(robot_orient - PI) < EPSILON || abs(robot_orient + PI) < EPSILON){ //facing down
-    robot_quarter_turn_counterclockwise();
-  }
+  if (robot_orient <= -1 * ROBOT_TURN_UP_ERROR && robot_orient >= -1 * PI_OVER_TWO - ROBOT_TURN_UP_ERROR) robot_quarter_turn_clockwise();
+  if (robot_orient >= -2 * PI - ROBOT_TURN_UP_ERROR && robot_orient <= -1 * PI_OVER_TWO - ROBOT_TURN_UP_ERROR) robot_quarter_turn_counterclockwise();
+  if (robot_orient <= PI_OVER_TWO - ROBOT_TURN_UP_ERROR) robot_quarter_turn_clockwise();
+  if (robot_orient >= PI_OVER_TWO + ROBOT_TURN_UP_ERROR || robot_orient <= -2 * PI + ROBOT_TURN_UP_ERROR) robot_quarter_turn_counterclockwise();
+  align_robot(2);
 }
 
 void robot_turn_down(){ //turns robot so that it is facing direction PI or -PI
   normalize_orient();
-  if (abs(robot_orient) < EPSILON) robot_quarter_turn_clockwise(); //facing up
-  if (abs(robot_orient + PI_OVER_TWO) < EPSILON){ //facing left
-    robot_quarter_turn_counterclockwise();
-  }
-  if (abs(robot_orient - PI_OVER_TWO) < EPSILON){ //facing right
-    robot_quarter_turn_clockwise();
-  }
+  if (robot_orient <= PI_OVER_TWO - ROBOT_TURN_UP_ERROR) robot_quarter_turn_clockwise();
+  if (robot_orient >= -1 * PI_OVER_TWO + ROBOT_TURN_UP_ERROR) robot_quarter_turn_counterclockwise();
+  if (robot_orient <= PI - ROBOT_TURN_UP_ERROR) robot_quarter_turn_clockwise();
+  if (robot_orient >=  -1 * PI - ROBOT_TURN_UP_ERROR) robot_quarter_turn_clockwise();
+  align_robot(2);
 }
 
 void robot_turn_left(){ //turns robot so that it is facing direction -PI/2
   normalize_orient();
-  if (abs(robot_orient - PI_OVER_TWO) < EPSILON) robot_quarter_turn_counterclockwise(); //robot facing right
-  if (abs(robot_orient) < EPSILON){ //robot_facing up
-    robot_quarter_turn_counterclockwise();
-  }
-  if (abs(robot_orient - PI) < EPSILON || abs(robot_orient + PI) < EPSILON){ //robot facing down
-    robot_quarter_turn_clockwise();
-  }
+  if (robot_orient >= ROBOT_TURN_UP_ERROR && robot_orient <= PI_OVER_TWO + ROBOT_TURN_UP_ERROR) robot_quarter_turn_counterclockwise();
+  if (robot_orient <= PI - ROBOT_TURN_UP_ERROR && robot_orient >= PI_OVER_TWO - ROBOT_TURN_UP_ERROR) robot_quarter_turn_clockwise();
+  if (robot_orient >=  -1 * PI_OVER_TWO + ROBOT_TURN_UP_ERROR) robot_quarter_turn_counterclockwise();
+  if (robot_orient <= -1 * PI_OVER_TWO - ROBOT_TURN_UP_ERROR || robot_orient >= PI - ROBOT_TURN_UP_ERROR) robot_quarter_turn_clockwise();
+  align_robot(2);
 }
 
 int check_slightly_right(unsigned long cur_time){ //return 1 if left sensor is HIGH
   if (cur_time >= line_sensor_time){
     update_line_sensor_vals(cur_time);
     if (line_sensor_checks == NUM_LINE_SENSORS){
+      /*Serial.print(left_line_sensor_val);
+  Serial.print('\t');
+  Serial.print(mid_line_sensor_val);
+  Serial.print('\t');
+  Serial.print(right_line_sensor_val);
+  Serial.print('\t');
+  Serial.print(main_line_sensor_val);
+  Serial.print('\t');
+  Serial.println(side_line_sensor_val);*/
       line_sensor_state = 0; //ready for new check
       if (left_line_sensor_val == HIGH && right_line_sensor_val == LOW) return 1;
       return 0;
     }
+    return 2;
   }
   return 2; //didnt check
 }
@@ -661,10 +673,20 @@ int check_slightly_left(unsigned long cur_time){ //return 1 if right sensor is H
   if (cur_time >= line_sensor_time){
     update_line_sensor_vals(cur_time);
     if (line_sensor_checks == NUM_LINE_SENSORS){
+      /*Serial.print(left_line_sensor_val);
+  Serial.print('\t');
+  Serial.print(mid_line_sensor_val);
+  Serial.print('\t');
+  Serial.print(right_line_sensor_val);
+  Serial.print('\t');
+  Serial.print(main_line_sensor_val);
+  Serial.print('\t');
+  Serial.println(side_line_sensor_val);*/
       line_sensor_state = 0; //ready for new check
       if (right_line_sensor_val == HIGH && left_line_sensor_val == LOW) return 1;
       return 0;
     }
+    return 2;
   }
   return 2; //didnt check
 }
@@ -681,7 +703,7 @@ void align_robot(int prev_direct){ //aligns robot on to line
       if (prev_direct == 0){ // 0 is we were turning clockwise
         start_robot_counterclockwise_align();
       }
-      if (prev_direct == 1){
+      else {
         start_robot_clockwise_align();
       }
     }
@@ -754,16 +776,16 @@ void robot_go_to_location(int final_x, int final_y){
   }
   else{
     if (y_line_robot > MID_ZONE_TOP_Y || y_line_robot < MID_ZONE_BOT_Y){ //only need to go horizontally and vertically
-      if (abs(robot_orient) < EPSILON && final_y > y_line_robot){ //if facing up and need to go up
+      if (abs(robot_orient) < LINE_PASS_ANGLE_ERROR && final_y > y_line_robot){
         robot_drive_vertic(final_y);
         robot_drive_horiz(final_x);
         return;
       }
-      if ((abs(robot_orient - PI) < EPSILON || abs(robot_orient + PI) < EPSILON) && final_y < y_line_robot){ //if facing down and need to go down
+      if (abs(robot_orient) > PI - LINE_PASS_ANGLE_ERROR && final_y < y_line_robot){
         robot_drive_vertic(final_y);
         robot_drive_horiz(final_x);
       }
-      else { //just go right first
+      else {
         robot_drive_horiz(final_x);
         robot_drive_vertic(final_y);
       }
@@ -787,7 +809,7 @@ void robot_go_to_location(int final_x, int final_y){
 
 void robot_go_to_gameboard(){
   robot_go_to_location(GAMEBOARD_INITIAL_X_ROBOT, GAMEBOARD_INITIAL_Y_ROBOT);
-  /*robot_turn_up();
+  robot_turn_up();
   unsigned long cur_time = micros();
   send_hopper_orient_ping(cur_time);
   start_robot_forward();
@@ -800,13 +822,11 @@ void robot_go_to_gameboard(){
   }
   stop_robot_motion();
   delay(STOP_MOTION_DELAY);
-  robot_quarter_turn_counterclockwise();*/
-  robot_turn_left(); //assuming can line follow
+  robot_quarter_turn_counterclockwise();
 }
 
 void robot_go_to_hopper(){ //find the location of the next hopper and go to it
   update_next_hopper();
-  go_to_next_hopper();
 }
 
 void update_next_hopper(){ //finds the best hopper to go to
@@ -819,8 +839,8 @@ void update_next_hopper(){ //finds the best hopper to go to
 }
 
 void go_to_next_hopper(){ //drive to optimal position for hopper
-  if (hoppers[next_hopper].orient == 0) robot_go_to_location(hoppers[next_hopper].x, hoppers[next_hopper].y + 3); //go to location 2 above the hopper
-  if (hoppers[next_hopper].orient == 1) robot_go_to_location(hoppers[next_hopper].x + 1, hoppers[next_hopper].y - 2); //go to location 2 below the hopper
+  if (hoppers[next_hopper].orient == 0) robot_go_to_location(hoppers[next_hopper].x, hoppers[next_hopper].y + 2); //go to location 2 above the hopper
+  if (hoppers[next_hopper].orient == 1) robot_go_to_location(hoppers[next_hopper].x + 1, hoppers[next_hopper].y - 1); //go to location 2 below the hopper
   if (hoppers[next_hopper].orient == 2) robot_go_to_location(1, 2); //go to location up and right of the bottom left hopper
   if (hoppers[next_hopper].orient == 3) robot_go_to_location(7, 2); //go to location up and left of the bottom right hopper
 }
@@ -829,11 +849,29 @@ void robot_drive_horiz(int line){ //robot drives to the line specified by line
   normalize_orient();
   if (line == x_line_robot) return;
   if (line > x_line_robot){ //need to go right
-      robot_turn_right();
+      while (abs(robot_orient - PI_OVER_TWO) > LINE_PASS_ANGLE_ERROR){ //not facing right
+        if (robot_orient < PI_OVER_TWO && robot_orient >= -1 * PI_OVER_TWO - EPSILON) robot_quarter_turn_clockwise();
+        else robot_quarter_turn_counterclockwise();
+      }
+      if(abs(robot_orient - PI_OVER_TWO) < LINE_PASS_ANGLE_ERROR){ //facing to right so drive forward
+        start_robot_straight_forward();
+      }
+      else{ //facing to left so drive backwards
+        start_robot_straight_backward();
+      }
       robot_drive_til_line(line, 0);  //drive to line
     }
     else { //need to go left
-      robot_turn_left();
+      while (abs(robot_orient + PI_OVER_TWO) > LINE_PASS_ANGLE_ERROR){ //not facing left
+        if (abs(robot_orient) > PI_OVER_TWO) robot_quarter_turn_clockwise();
+        else robot_quarter_turn_counterclockwise();
+      }
+      if(abs(robot_orient + PI_OVER_TWO) < LINE_PASS_ANGLE_ERROR){ //facing to left so drive forward
+        start_robot_straight_forward();
+      }
+      else{ //facing to left so drive backwards
+        start_robot_straight_backward();
+      }
       robot_drive_til_line(line, 0);  //drive to left line
     }
 }
@@ -842,11 +880,29 @@ void robot_drive_vertic(int line){ //robot drives to the line specified by line
   normalize_orient();
   if (line == y_line_robot) return;
   if (line > y_line_robot){ //need to go up
-      robot_turn_up();
+      while (abs(robot_orient) > LINE_PASS_ANGLE_ERROR){ //not facing up/down
+        if (robot_orient < 0) robot_quarter_turn_clockwise();
+        else robot_quarter_turn_counterclockwise();
+      }
+      if(abs(robot_orient) < LINE_PASS_ANGLE_ERROR){ //facing up so drive forward
+        start_robot_straight_forward();
+      }
+      else{ //facing down so drive backwards
+        start_robot_straight_backward();
+      }
       robot_drive_til_line(line, 1);  //drive to line
     }
     else { //need to go down
-      robot_turn_down();
+      while (robot_orient > LINE_PASS_ANGLE_ERROR - PI && robot_orient < PI - LINE_PASS_ANGLE_ERROR){ //not facing up/down
+        if (robot_orient > 0) robot_quarter_turn_clockwise();
+        else robot_quarter_turn_counterclockwise();
+      }
+      if(abs(abs(robot_orient) - PI) < LINE_PASS_ANGLE_ERROR){ //facing down so drive forward
+        start_robot_straight_forward();
+      }
+      else{ //facing up so drive backwards
+        start_robot_straight_backward();
+      }
       robot_drive_til_line(line, 1);  //drive to left line
     }
 }
@@ -904,6 +960,24 @@ void update_line_sensor_vals(unsigned long cur_time){
 
 
 void check_line_following(unsigned long cur_time){
+  /*Serial.print(left_line_sensor_val);
+  Serial.print('\t');
+  Serial.print(mid_line_sensor_val);
+  Serial.print('\t');
+  Serial.print(right_line_sensor_val);
+  Serial.print('\t');
+  Serial.print(main_line_sensor_val);
+  Serial.print('\t');
+  Serial.println(side_line_sensor_val);*/
+  //
+  /*Serial.print(cur_time);
+  Serial.print('\t');
+  Serial.print(side_line_sensor_val);
+  Serial.print('\t');
+  Serial.print(y_line_robot);
+  Serial.print('\t');
+  Serial.println(robot_on_line);*/
+  //if (side_line_sensor_val == HIGH && main_line_sensor_val == HIGH){ // robot passes a line
   if (side_line_sensor_val == HIGH){ // robot passes a line
     if (robot_on_line == 0){ 
       robot_passed_line(); //passed line
@@ -1042,23 +1116,83 @@ void line_far_right_forward(){ //too far right so turn left
 }
 
 void line_on_track_backward(unsigned long cur_time){ //back on track so drive straight again
-  line_on_track_forward(cur_time);
+  right_wheel_speed += (int) ((RIGHT_WHEEL_MAX_SPEED - right_wheel_speed) * (1 - 1/ (abs(correction_factor) + 1))); //bring both wheels closer to max speeds
+  left_wheel_speed += (int) ((LEFT_WHEEL_MAX_SPEED - left_wheel_speed) * (1 - 1/ (abs(correction_factor) + 1)));
+  if (off_track_flag == 1){
+    off_track_flag = 0;
+    on_track_time = cur_time + GOOD_ON_TRACK_TIME;
+    return;
+  }
+  if (cur_time > on_track_time){ //have been on line for good amount of time
+    correction_state = 0;
+    correction_factor = 0;
+    right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
+    left_wheel_speed = LEFT_WHEEL_MAX_SPEED;
+  }
 }
 
 void line_slightly_left_backward(){
-  line_slightly_right_forward(); //opposite direction since wheels spin opposite direction
+  off_track_flag = 1;
+  if (correction_factor == 0) correction_factor += correction_state; //prevent div by 0
+  if (correction_state == 2){ //coming from being far left
+    left_wheel_speed = (int) (LEFT_WHEEL_MAX_SPEED - (RIGHT_WHEEL_MAX_SPEED - right_wheel_speed) * (1 - 1/ (abs(correction_factor) + 1))); //turn opposite direction
+    right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
+    correction_state = -1; //now turning left
+  }
+  if (correction_state == -1){ //correcting slightly turning robot
+    if (correction_factor > 0){ //robot was far to the left
+      left_wheel_speed += (int) ((LEFT_WHEEL_MAX_SPEED - left_wheel_speed) * (1.0 - 1/ (abs(correction_factor) + 1)));
+    }
+    if (correction_factor < 0){ //robot was slightly right
+      right_wheel_speed = (int) (RIGHT_WHEEL_MAX_SPEED - (LEFT_WHEEL_MAX_SPEED - left_wheel_speed) * (1 - 1/ (abs(correction_factor) + 1))); //turn opposite direction slightly
+      left_wheel_speed = LEFT_WHEEL_MAX_SPEED;
+    }
+  }
+  if (correction_state == 0){
+    correction_state = 1;
+    right_wheel_speed = RIGHT_WHEEL_MAX_SPEED - MIN_SPEED_CORRECTION_VALUE;
+    left_wheel_speed = LEFT_WHEEL_MAX_SPEED;
+  }
 }
 
 void line_slightly_right_backward(){
-  line_slightly_left_forward(); //opposite direction since wheels spin opposite direction
+  off_track_flag = 1;
+  if (correction_factor == 0) correction_factor += correction_state; //prevent div by 0
+  if (correction_state == -2){ //coming from being far right
+    right_wheel_speed = (int) (RIGHT_WHEEL_MAX_SPEED - (LEFT_WHEEL_MAX_SPEED - left_wheel_speed) * (1.0 - 1/ (abs(correction_factor) + 1))); //turn opposite direction
+    left_wheel_speed = LEFT_WHEEL_MAX_SPEED;
+    correction_state = 1; //now turning right
+  }
+  if (correction_state == 1){ //correcting slightly turning robot
+    if (correction_factor < 0){ //robot was far to the right
+      right_wheel_speed += (int) ((RIGHT_WHEEL_MAX_SPEED - right_wheel_speed) * (1.0 - 1/ (abs(correction_factor) + 1)));
+    }
+    if (correction_factor > 0){ //robot was slightly left
+      left_wheel_speed = (int) (LEFT_WHEEL_MAX_SPEED - (RIGHT_WHEEL_MAX_SPEED - right_wheel_speed) * (1.0 - 1/ (abs(correction_factor) + 1))); //turn opposite direction slightly
+      right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
+    }
+  }
+  if (correction_state == 0){
+    correction_state = -1;
+    left_wheel_speed = LEFT_WHEEL_MAX_SPEED - MIN_SPEED_CORRECTION_VALUE;
+    right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
+  }
 }
 
 void line_far_left_backward(){ //too far left
-  line_far_right_forward(); //opposite direction since wheels spin opposite direction
+  off_track_flag = 1;
+  right_wheel_speed = RIGHT_WHEEL_MAX_SPEED - MAX_SPEED_CORRECTION_VALUE;
+  left_wheel_speed = LEFT_WHEEL_MAX_SPEED;
+  correction_state = 2;
+  if (correction_factor < 0) correction_factor = 2; //robot thinks its angled right, so reset this so it will think its angled left
 }
 
 void line_far_right_backward(){
-  line_far_left_forward(); //opposite direction since wheels spin opposite direction
+  off_track_flag = 1;
+  left_wheel_speed = LEFT_WHEEL_MAX_SPEED - MAX_SPEED_CORRECTION_VALUE;
+  right_wheel_speed = RIGHT_WHEEL_MAX_SPEED;
+  correction_state = -2; 
+  if (correction_factor > 0) correction_factor = -2; //robot thinks its angled left, so reset this so it will think its angled right
 }
 
 void robot_is_lost(){ //robot is lost
@@ -1074,10 +1208,15 @@ void robot_is_lost(){ //robot is lost
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void update_location(unsigned long cur_time){
+  /*Serial.println(wheel_ir_time);*/
   if (cur_time > wheel_ir_time){
     int right_ir = analogRead(RIGHT_IR_PIN);
     if (right_ir < IR_DIFFERENCE_VAL) right_ir = 0;
     if (right_ir >= IR_DIFFERENCE_VAL) right_ir = 1;
+    /*Serial.print(right_ir);
+    Serial.print('\t');
+    Serial.println(y_robot);*/
+    //int left_ir = digitalRead(LEFT_IR_PIN); //not used
     if (robot_direction == 1 || robot_direction == -1){ //robot is driving straight forward or backwards
       if (prev_ir_right == 0 && right_ir == 1){
         x_robot += sin(robot_orient) * robot_direction * WHEEL_CIRCUMFERENCE / WHEEL_NUM_HOLES;
@@ -1105,6 +1244,15 @@ int check_line_sensors_on_line(unsigned long cur_time){ //return 1 if SIDE line 
     update_line_sensor_vals(cur_time);
     if (line_sensor_checks == NUM_LINE_SENSORS){
       line_sensor_state = 0; //ready for new check
+      /*Serial.print(left_line_sensor_val);
+      Serial.print('\t');
+      Serial.print(mid_line_sensor_val);
+      Serial.print('\t');
+      Serial.print(right_line_sensor_val);
+      Serial.print('\t');
+      Serial.print(main_line_sensor_val);
+      Serial.print('\t');
+      Serial.println(side_line_sensor_val);*/
       if (side_line_sensor_val == HIGH) return 1;
       return 0;
     }
@@ -1124,11 +1272,17 @@ int check_line_sensors_on_line(unsigned long cur_time){ //return 1 if SIDE line 
 void send_hopper_detect_ping(unsigned long cur_time){
   unsigned int ping_record_time = hopper_detector.ping(); //measures time to receive ping
   ping_dist = ping_record_time / US_ROUNDTRIP_CM + (int) y_robot + HOP_DETECT_Y_OFFSET; // ping distance from gamefield bottom
+  Serial.println(ping_dist);
   ping_time = cur_time + HOP_DETECT_PING_DELAY; // add delay before another ping is sent
 }
 
 int detect_hoppers(){
-  hopper_detect_initial_pos(); // get to initial position for detecting hoppers
+  //hopper_detect_initial_pos(); // get to initial position for detecting hoppers
+  x_line_robot = 6;
+  x_robot = 60;
+  y_line_robot = 1;
+  y_robot = 10;
+  robot_orient = -1 * PI_OVER_TWO;
   start_robot_straight_forward();
   unsigned long cur_time = micros(); //Record the current robot time
   ping_time = cur_time; // initialize ping time
@@ -1145,6 +1299,8 @@ int detect_hoppers(){
     update_location(cur_time); // updates x_robot and y_robot
     check_line_sensors(cur_time);
     if (cur_time > ping_time){ // send another ping if enough time has passed
+    Serial.print(ping_dist);
+    Serial.print('\t');
       send_hopper_detect_ping(cur_time);
       
       if (ping_dist > HOP_DETECT_MAX_DIST) continue; //prevent sonar malfunctions from affecting anything
@@ -1181,6 +1337,9 @@ int detect_hoppers(){
       //found middle of hopper
       //if (ping_dist > prev_dist + HOPPER_DETECT_ERROR && ping_dist < prev_dist + HOPPER_DETECT_MAX_ERROR){ // Hopper is Orientation 0
       if (ping_dist > prev_dist + HOPPER_DETECT_ERROR){ // Hopper is Orientation 0
+      stop_robot_motion();
+      delay(1000);
+      start_robot_forward();
         hoppers[cur_hopper].x = ((int) x_robot + HOP_DETECT_X_OFFSET + HOP_DETECT_X_ERROR) / LINE_SEP_DIST;
         hoppers[cur_hopper].y = prev_dist / LINE_SEP_DIST;
         hoppers[cur_hopper].orient = 0;
@@ -1192,6 +1351,10 @@ int detect_hoppers(){
       }
       //if (ping_dist < prev_dist - HOPPER_DETECT_ERROR && ping_dist > prev_dist - HOPPER_DETECT_MAX_ERROR){ // Hopper is Orientation 1
       if (ping_dist < prev_dist - HOPPER_DETECT_ERROR){ // Hopper is Orientation 1
+        // Save state
+        stop_robot_motion();
+      delay(1000);
+      start_robot_forward();
         hoppers[cur_hopper].x = ((int) x_robot + HOP_DETECT_X_OFFSET + HOP_DETECT_X_ERROR) / LINE_SEP_DIST;
         hoppers[cur_hopper].y = prev_dist / LINE_SEP_DIST;
         hoppers[cur_hopper].orient = 1;
@@ -1212,6 +1375,76 @@ int detect_hoppers(){
   display_hoppers2(); //Shows data for each hopper on serial
   set_hopper_order();
   return 0;
+}
+
+void display_hoppers2(){
+  while (1){
+    pinMode(13, OUTPUT);
+    digitalWrite(13, HIGH);
+    delay(2000);
+    for (int x = 0; x < hoppers[0].x; x++){
+      digitalWrite(13, LOW);
+      delay(300);
+      digitalWrite(13, HIGH);
+      delay(300);
+    }
+    digitalWrite(13, LOW);
+    delay(2000);
+    for (int x = 0; x < hoppers[0].y; x++){
+      digitalWrite(13, LOW);
+      delay(300);
+      digitalWrite(13, HIGH);
+      delay(300);
+    }
+    digitalWrite(13, LOW);
+    delay(2000);
+    for (int x = 0; x < hoppers[0].orient; x++){
+      digitalWrite(13, LOW);
+      delay(300);
+      digitalWrite(13, HIGH);
+      delay(300);
+    }
+    digitalWrite(13, LOW);
+    delay(2000);
+    for (int x = 0; x < 30; x++){
+      digitalWrite(13, LOW);
+      delay(100);
+      digitalWrite(13, HIGH);
+      delay(100);
+    }
+    for (int x = 0; x < hoppers[1].x; x++){
+      digitalWrite(13, LOW);
+      delay(300);
+      digitalWrite(13, HIGH);
+      delay(300);
+    }
+    digitalWrite(13, LOW);
+    delay(2000);
+    for (int x = 0; x < hoppers[1].y; x++){
+      digitalWrite(13, LOW);
+      delay(300);
+      digitalWrite(13, HIGH);
+      delay(300);
+    }
+    digitalWrite(13, LOW);
+    delay(2000);
+    for (int x = 0; x < hoppers[1].orient; x++){
+      digitalWrite(13, LOW);
+      delay(300);
+      digitalWrite(13, HIGH);
+      delay(300);
+    }
+    digitalWrite(13, LOW);
+    delay(2000);
+    for (int x = 0; x < 30; x++){
+      digitalWrite(13, LOW);
+      delay(100);
+      digitalWrite(13, HIGH);
+      delay(100);
+    }
+    digitalWrite(13, HIGH);
+    delay(3000);
+  }
 }
 
 void display_hoppers(){
@@ -1252,7 +1485,10 @@ void hopper_detect_initial_pos(){
   stop_robot_motion();
   delay(STOP_MOTION_DELAY);
   normalize_orient();
-  robot_turn_left();
+  while (abs(robot_orient + PI_OVER_TWO) > LINE_PASS_ANGLE_ERROR){ //not facing left
+        if (abs(robot_orient) > PI_OVER_TWO) robot_quarter_turn_clockwise();
+        else robot_quarter_turn_counterclockwise();
+      }
   stop_robot_motion();
   delay(STOP_MOTION_DELAY);
 }
@@ -1404,7 +1640,7 @@ void orient_to_hopper(){
     }
     cur_time = micros();
   }
-  while(front_ping_dist < 3){
+  while(front_ping_dist < prev_val + 3){
     if (front_ping_time < cur_time) { 
       send_hopper_orient_ping(cur_time);
     }
@@ -1415,8 +1651,8 @@ void orient_to_hopper(){
   for (int x = 1; x < NUMBER_OF_HOP_ORIENT_DISTS; x++){
     while (1){ //get additional prev_dist value to average them
       if (front_ping_time < cur_time){ 
-        send_hopper_orient_ping(cur_time);
         if (front_ping_dist == 0) continue; //prevents error values
+        send_hopper_orient_ping(cur_time);
         cur_time = micros();
         break;
       }
@@ -1428,6 +1664,9 @@ void orient_to_hopper(){
   int avg_cur_dist = 0;
   while (avg_prev_dist >= avg_cur_dist){
     if (front_ping_time < cur_time){
+      /*Serial.print(avg_prev_dist);
+    Serial.print('\t');
+    Serial.println(avg_cur_dist);*/
       send_hopper_orient_ping(cur_time);
       if (front_ping_dist == 0) continue; //prevents error values
       for (int x = 0; x < NUMBER_OF_HOP_ORIENT_DISTS - 1; x++){
@@ -1463,7 +1702,6 @@ void align_to_hopper(){
     cur_time = micros();
   }
   //check if at right distance
-  start_robot_forward();
   float avg_dist = 0.0;
   while (abs(avg_dist - BALL_GRAB_PROPER_DISTANCE) > BALL_GRAB_DISTANCE_ERROR){ //get within close distance of hopper
     while (1){
@@ -1749,36 +1987,19 @@ void test_turning(){
   setup_consts();
   robot_orient = 0;
   y_line_robot = 1;
-  robot_turn_right();
-  delay(1000);
-  robot_turn_up();
-  delay(1000);
-  robot_turn_left();
-  delay(1000);
-  robot_turn_up();
-  delay(1000);
-  robot_turn_down();
-  delay(1000);
-  robot_turn_up();
-  delay(1000);
-  robot_turn_right();
-  delay(1000);
-  robot_turn_left();
-  delay(1000);
-  robot_turn_right();
-  delay(1000);
-  robot_turn_down();
-  delay(1000);
-  robot_turn_right();
-  delay(1000);
-  robot_turn_left();
-  delay(1000);
-  robot_turn_down();
-  delay(1000);
-  robot_turn_left();
-  delay(1000);
-  stop_robot_motion();
-  
+  align_robot(2);
+  delay(300);
+  robot_drive_vertic(3);
+  align_robot(2);
+  delay(2000);
+  /*for (int x = 0; x < 4; x++){
+    robot_quarter_turn_clockwise();
+    delay(1000);
+  }*/
+  for (int x = 0; x < 4; x++){
+    robot_quarter_turn_counterclockwise();
+    delay(1000);
+  }
 }
 
 void test_locomotion(){
@@ -1815,7 +2036,7 @@ void test_encoder(){
 void test_align(){
   while (1){
     Serial.println("started");
-    align_robot(2);
+    align_robot();
     delay(3000);
   }
 }
