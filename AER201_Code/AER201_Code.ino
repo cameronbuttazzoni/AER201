@@ -37,7 +37,8 @@ Version Control:
             1.13:
                 - Changed aligning to hopper algorithm, added going back to line algorithm, fixed main program function call order\
                 - Removed unused defines and functions
-                      
+            1.14:
+                - Changed the back to line algorithm, go for bottom right>bottom left hoppers, ignore the mid hoppers     
 
 Need to Change List:
 
@@ -113,9 +114,9 @@ Need to Add List:
 #define LEFT_BACKWARD_PIN 22 //Set to high to move left wheel backward
 #define RIGHT_FORWARD_PIN 26 //set to high to move right wheel forward
 #define RIGHT_BACKWARD_PIN 28 //set to high to move right wheel backward
-#define LEFT_WHEEL_MAX_SPEED 255 //max of 255
-#define RIGHT_WHEEL_MAX_SPEED 255 //max of 255
-#define LEFT_WHEEL_TURN_SPEED 140 //max of 255, set to 130
+#define LEFT_WHEEL_MAX_SPEED 225 //max of 255
+#define RIGHT_WHEEL_MAX_SPEED 225 //max of 255
+/*#define LEFT_WHEEL_TURN_SPEED 140 //max of 255, set to 130
 #define RIGHT_WHEEL_TURN_SPEED 140 //max of 255, set to 130
 #define LEFT_WHEEL_GAMEBOARD_SPEED 155 //speed of left wheel when moving along gameboard, 155
 #define RIGHT_WHEEL_GAMEBOARD_SPEED 155 //speed of right wheel when moving along gameboard, 155
@@ -124,8 +125,9 @@ Need to Add List:
 #define LEFT_WHEEL_ENCODER_SPEED 110 //speed of the left wheel when using the encoders during orienting on a hopper stage, 110
 #define RIGHT_WHEEL_ENCODER_SPEED 110 //speed of the right wheel when using the encoders during orienting on a hopper stage, 110
 #define LEFT_WHEEL_ORIENT_SPEED 200 //speed of the left wheel when aligning to a hopper, 90
-#define RIGHT_WHEEL_ORIENT_SPEED 200 //speed of the right wheel when aligning to a hopper, 90
-#define TURN_CORRECTION_DELAY 350 //after quarter turn reverse turn for this long to correct for overturning, 350
+#define RIGHT_WHEEL_ORIENT_SPEED 200 //speed of the right wheel when aligning to a hopper, 90*/
+#define TURN_CORRECTION_DELAY 150 //after quarter turn reverse turn for this long to correct for overturning, 350
+#define PER_ROUND_SPEED_INCREASE 4 //increases all speed by this amount per loop
 
 // LINE SENSORS
 #define NUM_LINE_SENSORS 5 //number of line sensors
@@ -138,7 +140,7 @@ Need to Add List:
 #define GOOD_ON_TRACK_TIME 2000000 //microseconds that the robot should be on the line for
 #define MIN_SPEED_CORRECTION_VALUE 10 //minimum value to change wheel speed by when veering off course
 #define MAX_SPEED_CORRECTION_VALUE 30 //max value to change wheel speed for slight off course
-#define ROBOT_ON_LINE_ERROR 30 //number of checks after line before we start checking if we passed line again
+#define ROBOT_ON_LINE_ERROR 10 //number of checks after line before we start checking if we passed line again,
 
 // BALL RELEASE AND PICKUP CONSTANTS
 #define BALL_GRAB_FAN_PIN 38 //pin that controls the fan to suck up balls
@@ -158,12 +160,12 @@ Need to Add List:
 #define BALL_GRAB_MAX_DIST 60 //max dist, 60
 #define BALL_GRAB_PING_DELAY 30000 //delay for the front ultrasonic sensor
 #define NUMBER_OF_HOP_ORIENT_DISTS 2 //must be even number, half this value is the number of values in a row that are averaged
-#define BALL_GRAB_PROPER_DISTANCE 17 //distance the robot must be from the hopper to grab a ball
+#define BALL_GRAB_PROPER_DISTANCE 14.5 //distance the robot must be from the hopper to grab a ball 17 -> 15
 #define BALL_GRAB_DISTANCE_ERROR 1 //distance the robot must be within for the robot to try and grab the ball
 #define ZERO_MEASUREMENTS_IN_ROW 2 //need this many 0s in between hopper legs
 #define HOPPER_CENTER_LENGTH_X 13 //distance from leg to centre of hopper in x direction
 #define HOPPER_CENTER_LENGTH_Y 7 //distance from leg to centre of hopper in y direction
-#define HOP_ORIENT_SCAN_DIST_CORNER 17 //distance for the corner hoppers, from 1,1 is 17
+#define HOP_ORIENT_SCAN_DIST_CORNER 46 //distance for the corner hoppers, from 1,2 is 34.5 or from 2, 2 46
 
 //Scan gameboard
 #define ZERO_POSITION_IR_PIN A1 //the row 0 ir pin
@@ -180,7 +182,7 @@ Need to Add List:
 #define MID_ZONE_TOP_Y 6 // the y line of the top of the middle zone
 #define MID_ZONE_BOT_Y 3 // the y line of the bot of the middle zone
 #define SERIAL_BAUD_RATE 9600 //Serial bits per second
-#define STOP_MOTION_DELAY 300 //everytime you stop motion, delay for this amount of time
+#define STOP_MOTION_DELAY 400 //everytime you stop motion, delay for this amount of time
 
 // MATH
 #define PI_OVER_TWO 1.5708
@@ -205,10 +207,22 @@ typedef struct
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//WHEEL　SPEEDS
+int LEFT_WHEEL_TURN_SPEED = 130; //max of 255, set to 130
+int RIGHT_WHEEL_TURN_SPEED = 130; //max of 255, set to 130
+int LEFT_WHEEL_GAMEBOARD_SPEED = 155; //speed of left wheel when moving along gameboard, 155
+int RIGHT_WHEEL_GAMEBOARD_SPEED = 155; //speed of right wheel when moving along gameboard, 155
+int LEFT_WHEEL_ALIGN_SPEED = 110; //speed of left wheel when aligning to the line, set to 90
+int RIGHT_WHEEL_ALIGN_SPEED = 110; //speed of left wheel when aligning to the line, set to 90
+int LEFT_WHEEL_ENCODER_SPEED = 110; //speed of the left wheel when using the encoders during orienting on a hopper stage, 110
+int RIGHT_WHEEL_ENCODER_SPEED = 110; //speed of the right wheel when using the encoders during orienting on a hopper stage, 110
+int LEFT_WHEEL_ORIENT_SPEED = 160; //speed of the left wheel when aligning to a hopper, 90
+int RIGHT_WHEEL_ORIENT_SPEED = 160; //speed of the right wheel when aligning to a hopper, 90
+
 
 const int column_locations[] = {65, 70, 75, 80, 85, 90, 95}; //stores the x-coordinates of each of the gameboard columns WRONG
 const int line_sensor_order[] = {5, 2, 3, 4, 1}; //1 is left sensor, 2 is middle sensor, 3 is right sensor, 4 is main sensor, 5 is side sensor
-const int line_sensor_delay[] = {120, 0, 0, 0, 110}; //cumulative delay, must be in order from smallest to largest, 220
+const int line_sensor_delay[] = {210, 0, 0, 0, 120}; //cumulative delay, must be in order from smallest to largest, 220
 const int ldr_wall_vals[] = {10, 10, 10, 10, 10, 10};
 const int ldr_ball_vals[] = {10, 10, 10, 10, 10, 10};
 int ldr_vals[] = {0, 0, 0, 0, 0, 0};
@@ -238,7 +252,7 @@ Hopper hoppers[NUMBER_OF_HOPPERS]; // Saves the four game field hopper structure
 int hopper_order[4] = {3, 2, 1, 0}; //best order to get the hoppers in
 int gameboard[NUMBER_BOARD_COLUMNS][NUMBER_BOARD_ROWS] = {0}; // 0 = no ball, 1 = our ball, 2 = their ball, 3 = probably our ball, 4 = probably their ball
 unsigned int next_ball_column = 5; //holds the column to play the next ball into
-unsigned int next_hopper; //holds the next hopper to get a ball from
+unsigned int next_hopper = 3; //holds the next hopper to get a ball from
 int left_wheel_speed = LEFT_WHEEL_MAX_SPEED; //speed of left wheel
 int right_wheel_speed = RIGHT_WHEEL_MAX_SPEED; //speed of right wheel
 Servo fan_servo;
@@ -341,10 +355,16 @@ void gameplay_strategy();
 void setup(){
   setup_pins();
   stop_robot_motion();
-  delay(2000);
-  test_bottom_right_hopper();
+  delay(1000);
+  /*init_hoppers();
+  y_line_robot = 2;
+  x_line_robot = 6;
+  robot_orient = PI_OVER_TWO;
+  orient_on_hopper();
+  pick_up_game_ball();
+  go_back_to_line_bot_right();
   stop_robot_motion();
-  delay(5000000);
+  delay(5000000);*/
   main_setup();
 }
 
@@ -398,6 +418,7 @@ void main_loop(){
   robot_go_to_hopper();
   error_check = grab_ball();
   if (error_check != 0){ grab_ball_error(error_check);}
+  increase_speeds();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -667,6 +688,7 @@ void update_line_sensors(){ //update every line sensor val
   line_sensor_state = 0;
   unsigned long cur_time = micros();
   line_sensor_time = cur_time + PULSE_LINE_SENSOR_TIME;
+  delay(1);
   while (1){
     cur_time = micros();
     if (line_sensor_time > cur_time) continue;
@@ -677,11 +699,19 @@ void update_line_sensors(){ //update every line sensor val
 
 void robot_drive_til_line(int line, int direct){ //line is the line number to reach, direct is 0 for x, 1 for y
   unsigned long cur_time;
-  while (1){
-    cur_time = micros();
-    check_line_sensors(cur_time);
-    if (x_line_robot == line && direct == 0) break;
-    if (y_line_robot == line && direct == 1) break;
+  if (direct == 0){
+    while (1){
+      cur_time = micros();
+      check_line_sensors(cur_time);
+      if (x_line_robot == line) break;
+    }
+  }
+  else{
+    while (1){
+      cur_time = micros();
+      check_line_sensors(cur_time);
+    if (y_line_robot == line) break;
+    }
   }
   stop_robot_motion();
   delay(STOP_MOTION_DELAY);
@@ -696,8 +726,24 @@ void robot_drive_til_line(int line, int direct){ //line is the line number to re
   stop_robot_motion();
   delay(STOP_MOTION_DELAY);
 }
-
 void robot_go_to_location(int final_x, int final_y){
+  if (x_line_robot == GAMEFIELD_RED_LINE_NUM && y_line_robot == 1){ //start of game
+    robot_drive_horiz(GAMEFIELD_RED_LINE_NUM + 2);
+    robot_drive_vertic(final_y);
+    robot_drive_horiz(final_x);
+  }
+  else{
+    if (x_line_robot > GAMEFIELD_RED_LINE_NUM){ // go right then find
+      robot_drive_horiz(ROBOT_FOLLOW_RIGHT_COLUMN_VAL);
+    }
+    else{
+      robot_drive_horiz(ROBOT_FOLLOW_LEFT_COLUMN_VAL);
+    }
+    robot_drive_vertic(final_y);
+    robot_drive_horiz(final_x);
+  }
+}
+/*void robot_go_to_location(int final_x, int final_y){
   normalize_orient(); //forces angle between -pi and pi
   if (y_line_robot < 2 && final_y >= 2){ //need to go up first
     if (x_line_robot == GAMEFIELD_RED_LINE_NUM){
@@ -741,7 +787,7 @@ void robot_go_to_location(int final_x, int final_y){
   }
   stop_robot_motion();
   delay(STOP_MOTION_DELAY);
-}
+}*/
 
 void robot_go_to_gameboard(){
   robot_go_to_location(GAMEBOARD_INITIAL_X_ROBOT, GAMEBOARD_INITIAL_Y_ROBOT);
@@ -779,8 +825,8 @@ void update_next_hopper(){ //finds the best hopper to go to
 void go_to_next_hopper(){ //drive to optimal position for hopper
   if (hoppers[next_hopper].orient == 0) robot_go_to_location(hoppers[next_hopper].x, hoppers[next_hopper].y + 3); //go to location 2 above the hopper
   if (hoppers[next_hopper].orient == 1) robot_go_to_location(hoppers[next_hopper].x + 1, hoppers[next_hopper].y - 2); //go to location 2 below the hopper
-  if (hoppers[next_hopper].orient == 2) robot_go_to_location(1, 2); //go to location up and right of the bottom left hopper
-  if (hoppers[next_hopper].orient == 3) robot_go_to_location(7, 2); //go to location up and left of the bottom right hopper
+  if (hoppers[next_hopper].orient == 2) robot_go_to_location(2, 2); //go to location up and right of the bottom left hopper
+  if (hoppers[next_hopper].orient == 3) robot_go_to_location(6, 2); //go to location up and left of the bottom right hopper
 }
 
 void robot_drive_horiz(int line){ //robot drives to the line specified by line
@@ -1475,6 +1521,7 @@ void align_to_hopper(){
     if (avg_dist > BALL_GRAB_PROPER_DISTANCE) start_robot_forward(); //too far away so go closer
     else start_robot_backward(); //too close so go backwards
   }  
+  delay(500);
   stop_robot_motion();
   delay(STOP_MOTION_DELAY);
 }
@@ -1509,11 +1556,11 @@ int go_back_to_line_mid(){ //after getting a gameball, go back to the line
     cur_time = micros();
     update_line_sensor_vals(cur_time);
   }
-  while(main_line_sensor_val == HIGH){
+  while(mid_line_sensor_val == HIGH){
     update_line_sensor_vals(cur_time);
     cur_time = micros();
   }
-  while(main_line_sensor_val == LOW){
+  while(mid_line_sensor_val == LOW){
     update_line_sensor_vals(cur_time);
     cur_time = micros();
   }
@@ -1538,80 +1585,111 @@ int go_back_to_line_mid(){ //after getting a gameball, go back to the line
 }
 
 int go_back_to_line_bot_right(){ //after getting a gameball, go back to the line
-  left_wheel_speed = 1.5 * LEFT_WHEEL_ALIGN_SPEED; //make the robot_turn_so it will always intercept the vertical line
-  right_wheel_speed = RIGHT_WHEEL_ALIGN_SPEED;
+  left_wheel_speed = 1.1 * LEFT_WHEEL_ALIGN_SPEED; //make the robot_turn_so it will always intercept the horizontal line
+  right_wheel_speed = 1.55 * RIGHT_WHEEL_ALIGN_SPEED;
   start_robot_backward();
-  main_line_sensor_val = LOW;
+  main_line_sensor_val = HIGH;
   unsigned long cur_time = micros();
-  while(main_line_sensor_val == LOW){
-    update_line_sensor_vals(cur_time);
-    cur_time = micros();
-  }
-  stop_robot_motion();
-  delay(STOP_MOTION_DELAY);
-  start_robot_clockwise_align();
-  mid_line_sensor_val = LOW;
-  while (mid_line_sensor_val == LOW){// make the robot align with the vertical line
-    cur_time = micros();
-    update_line_sensor_vals(cur_time);
-  }
+  line_sensor_state = 0;
+  int flag = 0;
+  delay(500);
+  line_sensor_state = 0;
+  flag = 0;
+  line_sensor_time = cur_time;
   while(main_line_sensor_val == HIGH){
-    update_line_sensor_vals(cur_time);
+    if (cur_time >= line_sensor_time) update_line_sensor_vals(cur_time);
     cur_time = micros();
   }
-  while(main_line_sensor_val == LOW){
-    update_line_sensor_vals(cur_time);
+  delay(200);
+  line_sensor_state = 0;
+  while(main_line_sensor_val == LOW){ //drive backwards until robots position is on the horizontal line
+    if (cur_time >= line_sensor_time) update_line_sensor_vals(cur_time);
     cur_time = micros();
   }
   stop_robot_motion();
   delay(STOP_MOTION_DELAY);
-  y_line_robot = 1;
-  y_robot = y_line_robot * LINE_SEP_DIST;
-  x_line_robot = 8;
-  x_robot = x_line_robot * LINE_SEP_DIST;
-  robot_orient = -1 * PI_OVER_TWO;
-  start_robot_straight_forward();
-  robot_drive_til_line(7, 0);
-  stop_robot_motion();
-  delay(STOP_MOTION_DELAY);
-  return 0;
-}
-
-int go_back_to_line_bot_left(){
-  left_wheel_speed = LEFT_WHEEL_ALIGN_SPEED; //make the robot_turn_so it will always intercept the vertical line
-  right_wheel_speed = 1.5 * RIGHT_WHEEL_ALIGN_SPEED;
-  start_robot_backward();
-  main_line_sensor_val = LOW;
-  unsigned long cur_time = micros();
-  while(main_line_sensor_val == LOW){
-    update_line_sensor_vals(cur_time);
+  left_wheel_speed = LEFT_WHEEL_ALIGN_SPEED;
+  right_wheel_speed = RIGHT_WHEEL_ALIGN_SPEED;
+  update_line_sensors();
+  start_robot_forward();
+  while (main_line_sensor_val == LOW){
+    if (cur_time >= line_sensor_time) update_line_sensor_vals(cur_time);
     cur_time = micros();
   }
   stop_robot_motion();
   delay(STOP_MOTION_DELAY);
   start_robot_counterclockwise_align();
   mid_line_sensor_val = LOW;
-  while (mid_line_sensor_val == LOW){// make the robot align with the vertical line
+  line_sensor_state = 0;
+  flag = 0;
+  while (mid_line_sensor_val == LOW){// make the robot align with the horizontal line
     cur_time = micros();
-    update_line_sensor_vals(cur_time);
+    if (cur_time >= line_sensor_time) update_line_sensor_vals(cur_time);
   }
-  while(main_line_sensor_val == HIGH){
-    update_line_sensor_vals(cur_time);
+  delay(100);
+  line_sensor_state = 0;
+  while(mid_line_sensor_val == HIGH){ //skip the vertical line we intercept
+    if (cur_time >= line_sensor_time) update_line_sensor_vals(cur_time);
     cur_time = micros();
   }
-  while(main_line_sensor_val == LOW){
-    update_line_sensor_vals(cur_time);
+  flag = 0;
+  delay(100);
+  line_sensor_state = 0;
+  while(mid_line_sensor_val == LOW){ //wait for the horizontal line
+    if (cur_time >= line_sensor_time) update_line_sensor_vals(cur_time);
     cur_time = micros();
   }
   stop_robot_motion();
   delay(STOP_MOTION_DELAY);
-  x_line_robot = 0;
+  y_line_robot = 2;
+  y_robot = y_line_robot * LINE_SEP_DIST;
+  x_line_robot = 6;
+  x_robot = x_line_robot * LINE_SEP_DIST;
+  robot_orient = PI_OVER_TWO;
+  start_robot_straight_forward();
+  robot_drive_til_line(7, 0); //drive until on line intersection
+  stop_robot_motion();
+  delay(STOP_MOTION_DELAY);
+  return 0;
+}
+
+int go_back_to_line_bot_left(){
+  left_wheel_speed = 1.45 * LEFT_WHEEL_ALIGN_SPEED; //make the robot_turn_so it will always intercept the horizontal line
+  right_wheel_speed = 1.1 * RIGHT_WHEEL_ALIGN_SPEED;
+  start_robot_backward();
+  main_line_sensor_val = LOW;
+  unsigned long cur_time = micros();
+  line_sensor_state = 0;
+  while(main_line_sensor_val == LOW){ //drive back until we are on the horizontal line
+    if (cur_time >= line_sensor_time) update_line_sensor_vals(cur_time);
+    cur_time = micros();
+  }
+  stop_robot_motion();
+  delay(STOP_MOTION_DELAY);
+  start_robot_counterclockwise_align();
+  mid_line_sensor_val = LOW;
+  line_sensor_state = 0;
+  while (mid_line_sensor_val == LOW){// make the robot align with the horizontal line
+    cur_time = micros();
+    if (cur_time >= line_sensor_time) update_line_sensor_vals(cur_time);
+  }
+  while(mid_line_sensor_val == HIGH){ //skip the first vertical line we pass over
+    if (cur_time >= line_sensor_time) update_line_sensor_vals(cur_time);
+    cur_time = micros();
+  }
+  while(mid_line_sensor_val == LOW){ //wait til we reach the horizontal line
+    if (cur_time >= line_sensor_time) update_line_sensor_vals(cur_time);
+    cur_time = micros();
+  }
+  stop_robot_motion();
+  delay(STOP_MOTION_DELAY);
+  x_line_robot = 0; //update new coordinates and direction
   x_robot = 0;
-  y_line_robot = 1;
+  y_line_robot = 2;
   y_robot = y_line_robot * LINE_SEP_DIST;
   robot_orient = PI_OVER_TWO;
   start_robot_straight_forward();
-  robot_drive_til_line(1, 0);
+  robot_drive_til_line(1, 0); //drive forward so that robot is on a line intersection
   stop_robot_motion();
   delay(STOP_MOTION_DELAY);
   return 0;
@@ -1738,9 +1816,9 @@ int pre_board_scan2(){
 int pre_board_scan(){
   int error_check = game_strategy();
   place_game_ball();
-  x_line_robot = (x_robot) / LINE_SEP_DIST;
+  x_line_robot = floor((x_robot) / LINE_SEP_DIST) + 1;
   start_robot_straight_forward();
-  robot_drive_til_line(3, 0);
+  robot_drive_til_line(1, 0);
 }
 
 void pre_board_scan_error(int error){
@@ -1797,7 +1875,7 @@ void release_ball(){
   //stop_robot_motion();
   fan_servo.write(BALL_RELEASE_SERVO_FINAL_VAL);
   digitalWrite(BALL_GRAB_FAN_PIN, LOW); //low means the fan is sucking up the ball
-  delay(0.3);
+  delay(500);
   digitalWrite(BALL_GRAB_FAN_PIN, HIGH);
   delay(RELEASE_BALL_RESET_DELAY);
   fan_servo.write(BALL_RELEASE_SERVO_INITIAL_VAL);
@@ -1813,6 +1891,7 @@ void release_ball(){
 
 void test_fan(){
   pick_up_game_ball();
+  delay(2000);
   release_ball();
   /*fan_servo.write(BALL_RELEASE_SERVO_FINAL_VAL);
   delay(2000);
@@ -1908,6 +1987,7 @@ void test_align(){
 //
 //
 void test_align_hopper(){
+  init_hoppers();
   orient_to_hopper(); //get right angle to hopper
   align_to_hopper(); //get right distance to hopper
 }
@@ -1967,4 +2047,17 @@ void test_bottom_left_hopper(){
   robot_go_to_gameboard();
   pre_board_scan();
   robot_go_to_hopper();
+}
+
+void increase_speeds(){
+  LEFT_WHEEL_TURN_SPEED += PER_ROUND_SPEED_INCREASE;
+  RIGHT_WHEEL_TURN_SPEED += PER_ROUND_SPEED_INCREASE;
+  LEFT_WHEEL_GAMEBOARD_SPEED += PER_ROUND_SPEED_INCREASE;
+  RIGHT_WHEEL_GAMEBOARD_SPEED += PER_ROUND_SPEED_INCREASE;
+  LEFT_WHEEL_ALIGN_SPEED += PER_ROUND_SPEED_INCREASE;
+  RIGHT_WHEEL_ALIGN_SPEED += PER_ROUND_SPEED_INCREASE;
+  LEFT_WHEEL_ENCODER_SPEED += PER_ROUND_SPEED_INCREASE;
+  RIGHT_WHEEL_ENCODER_SPEED += PER_ROUND_SPEED_INCREASE;
+  LEFT_WHEEL_ORIENT_SPEED += PER_ROUND_SPEED_INCREASE;
+  RIGHT_WHEEL_ORIENT_SPEED  += PER_ROUND_SPEED_INCREASE;
 }

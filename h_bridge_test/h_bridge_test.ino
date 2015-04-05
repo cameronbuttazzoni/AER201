@@ -8,7 +8,7 @@ int right_speed = 255;
 int left_speed = 255;
 void setup(){
   setup_pins();
-  drive_forward_analog();
+  drive_clockwise_analog();
 }
 
 void loop(){
@@ -76,13 +76,13 @@ void drive_backward_analog(){
 void drive_clockwise(){
   digitalWrite(RIGHT_WHEEL_ENABLE_PIN, HIGH);
   digitalWrite(LEFT_WHEEL_ENABLE_PIN, HIGH);
-  digitalWrite(LEFT_BACKWARD_PIN, HIGH);
-  digitalWrite(LEFT_FORWARD_PIN, LOW);
-  digitalWrite(RIGHT_BACKWARD_PIN, LOW);
-  digitalWrite(RIGHT_FORWARD_PIN, HIGH);
+  digitalWrite(LEFT_BACKWARD_PIN, LOW);
+  digitalWrite(LEFT_FORWARD_PIN, HIGH);
+  digitalWrite(RIGHT_BACKWARD_PIN, HIGH);
+  digitalWrite(RIGHT_FORWARD_PIN, LOW);
 }
 
-void drive_clockwise_analog(){
+void drive_counterclockwise_analog(){
   analogWrite(RIGHT_WHEEL_ENABLE_PIN, right_speed);
   analogWrite(LEFT_WHEEL_ENABLE_PIN, left_speed);
   digitalWrite(LEFT_BACKWARD_PIN, HIGH);
@@ -94,13 +94,13 @@ void drive_clockwise_analog(){
 void drive_counterclockwise(){
   digitalWrite(RIGHT_WHEEL_ENABLE_PIN, HIGH);
   digitalWrite(LEFT_WHEEL_ENABLE_PIN, HIGH);
-  digitalWrite(LEFT_BACKWARD_PIN, LOW);
-  digitalWrite(LEFT_FORWARD_PIN, HIGH);
-  digitalWrite(RIGHT_BACKWARD_PIN, HIGH);
-  digitalWrite(RIGHT_FORWARD_PIN, LOW);
+  digitalWrite(LEFT_BACKWARD_PIN, HIGH);
+  digitalWrite(LEFT_FORWARD_PIN, LOW);
+  digitalWrite(RIGHT_BACKWARD_PIN, LOW);
+  digitalWrite(RIGHT_FORWARD_PIN, HIGH);
 }
 
-void drive_counterclockwise_analog(){
+void drive_clockwise_analog(){
   analogWrite(RIGHT_WHEEL_ENABLE_PIN, right_speed);
   analogWrite(LEFT_WHEEL_ENABLE_PIN, left_speed);
   digitalWrite(LEFT_BACKWARD_PIN, LOW);
