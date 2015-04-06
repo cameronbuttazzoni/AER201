@@ -114,8 +114,8 @@ Need to Add List:
 #define LEFT_BACKWARD_PIN 22 //Set to high to move left wheel backward
 #define RIGHT_FORWARD_PIN 26 //set to high to move right wheel forward
 #define RIGHT_BACKWARD_PIN 28 //set to high to move right wheel backward
-#define LEFT_WHEEL_MAX_SPEED 225 //max of 255
-#define RIGHT_WHEEL_MAX_SPEED 225 //max of 255
+#define LEFT_WHEEL_MAX_SPEED 255 //max of 255
+#define RIGHT_WHEEL_MAX_SPEED 255 //max of 255
 /*#define LEFT_WHEEL_TURN_SPEED 140 //max of 255, set to 130
 #define RIGHT_WHEEL_TURN_SPEED 140 //max of 255, set to 130
 #define LEFT_WHEEL_GAMEBOARD_SPEED 155 //speed of left wheel when moving along gameboard, 155
@@ -139,13 +139,14 @@ Need to Add List:
 #define PULSE_LINE_SENSOR_TIME 3000 //send a pulse every "time to check all line sensors" + PULSE_LINE_SENSOR_TIME MICROSECONDS
 #define GOOD_ON_TRACK_TIME 2000000 //microseconds that the robot should be on the line for
 #define MIN_SPEED_CORRECTION_VALUE 10 //minimum value to change wheel speed by when veering off course
-#define MAX_SPEED_CORRECTION_VALUE 30 //max value to change wheel speed for slight off course
+#define MAX_SPEED_CORRECTION_VALUE 40 //max value to change wheel speed for slight off course
 #define ROBOT_ON_LINE_ERROR 10 //number of checks after line before we start checking if we passed line again,
 
 // BALL RELEASE AND PICKUP CONSTANTS
 #define BALL_GRAB_FAN_PIN 38 //pin that controls the fan to suck up balls
 #define BALL_GRAB_FAN_CONST_PIN 40 //always keep this HIGH
 #define BALL_RELEASE_SERVO_PIN 50 //pin that controls the servo motor to release the ball
+#define SERVO_VOLTAGE_PIN 48 // pin that supplies voltage to the servo
 #define BALL_SUCTION_ON_TIME 7000 //amount of time the vacuum sucks for when picking up a ball MILLISECONDS
 #define BALL_SUCTION_OFF_TIME 5000 //amount of time the robot delays for after turning off the fan MILLISECONDS
 #define BALL_RELEASE_SERVO_INITIAL_VAL 136 //value for when the servo is closed, 136
@@ -363,8 +364,9 @@ void setup(){
   orient_on_hopper();
   pick_up_game_ball();
   go_back_to_line_bot_right();
-  stop_robot_motion();
-  delay(5000000);*/
+  stop_robot_motion();*/
+  //test_servo_fix();
+  //delay(5000000);
   main_setup();
 }
 
@@ -383,12 +385,16 @@ void setup_pins(){
   pinMode(LEFT_BACKWARD_PIN, OUTPUT);
   pinMode(BALL_GRAB_FAN_PIN, OUTPUT);
   pinMode(BALL_GRAB_FAN_CONST_PIN, OUTPUT);
+  pinMode(SERVO_VOLTAGE_PIN, OUTPUT);
+  //digitalWrite(SERVO_VOLTAGE_PIN, HIGH);
+  //delay(300);
   digitalWrite(BALL_GRAB_FAN_CONST_PIN, HIGH);
   digitalWrite(BALL_GRAB_FAN_PIN, HIGH); //high means the fan is not on
   fan_servo.attach(BALL_RELEASE_SERVO_PIN);
   delay(100);
   fan_servo.write(BALL_RELEASE_SERVO_INITIAL_VAL);
   delay(1000);
+  digitalWrite(SERVO_VOLTAGE_PIN, LOW);
 }
 
 void setup_consts(){
@@ -710,7 +716,7 @@ void robot_drive_til_line(int line, int direct){ //line is the line number to re
     while (1){
       cur_time = micros();
       check_line_sensors(cur_time);
-    if (y_line_robot == line) break;
+      if (y_line_robot == line) break;
     }
   }
   stop_robot_motion();
@@ -1521,7 +1527,7 @@ void align_to_hopper(){
     if (avg_dist > BALL_GRAB_PROPER_DISTANCE) start_robot_forward(); //too far away so go closer
     else start_robot_backward(); //too close so go backwards
   }  
-  delay(500);
+  delay(800);
   stop_robot_motion();
   delay(STOP_MOTION_DELAY);
 }
@@ -1873,12 +1879,18 @@ void gameplay_strategy(){
 
 void release_ball(){
   //stop_robot_motion();
+  //digitalWrite(SERVO_VOLTAGE_PIN, HIGH);
+  //delay(300);
   fan_servo.write(BALL_RELEASE_SERVO_FINAL_VAL);
   digitalWrite(BALL_GRAB_FAN_PIN, LOW); //low means the fan is sucking up the ball
   delay(500);
   digitalWrite(BALL_GRAB_FAN_PIN, HIGH);
+  fan_servo.write(BALL_RELEASE_SERVO_FINAL_VAL);
   delay(RELEASE_BALL_RESET_DELAY);
   fan_servo.write(BALL_RELEASE_SERVO_INITIAL_VAL);
+  delay(100);
+  //digitalWrite(SERVO_VOLTAGE_PIN, LOW);
+  //delay(100);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2060,4 +2072,28 @@ void increase_speeds(){
   RIGHT_WHEEL_ENCODER_SPEED += PER_ROUND_SPEED_INCREASE;
   LEFT_WHEEL_ORIENT_SPEED += PER_ROUND_SPEED_INCREASE;
   RIGHT_WHEEL_ORIENT_SPEED  += PER_ROUND_SPEED_INCREASE;
+}
+
+void test_servo_fix(){
+  for (int x = 0; x < 2; x++){
+    start_robot_straight_forward();
+    delay(2000);
+    stop_robot_motion();
+    delay(2000);
+    right_wheel_speed = 1.5 * RIGHT_WHEEL_ALIGN_SPEED;
+    left_wheel_speed = 1.1 * LEFT_WHEEL_ALIGN_SPEED;
+    start_robot_forward();
+    delay(2000);
+    stop_robot_motion();
+    delay(2000);
+    start_robot_clockwise();
+    delay(2000);
+    stop_robot_motion();
+    delay(2000);
+    start_robot_clockwise();
+    delay(2000);
+    stop_robot_motion();
+    delay(2000);
+  }
+  release_ball();
 }
