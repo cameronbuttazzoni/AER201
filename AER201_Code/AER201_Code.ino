@@ -100,7 +100,7 @@ Need to Add List:
 #define WHEEL_CIRCUMFERENCE 28.3 //circumference of the wheel (in cm)
 #define WHEEL_NUM_HOLES 18 //number of holes in the wheel
 #define POSITION_ERROR 2 //in cm must be within this distance for position checks MAKE SMALLER THEN MIN ENCODER CHANGE
-#define IR_DIFFERENCE_VAL 10 //greater than or equal to this val counts as the sensors detecting, less than this is not detecting
+#define IR_DIFFERENCE_VAL 1 //greater than or equal to this val counts as the sensors detecting, less than this is not detecting
 
 // ROBOT DIMENSIONS
 #define ROBOT_LENGTH_FRONT 12.5 //distance from point of rotation to front of robot
@@ -140,12 +140,12 @@ Need to Add List:
 #define GOOD_ON_TRACK_TIME 2000000 //microseconds that the robot should be on the line for
 #define MIN_SPEED_CORRECTION_VALUE 10 //minimum value to change wheel speed by when veering off course
 #define MAX_SPEED_CORRECTION_VALUE 40 //max value to change wheel speed for slight off course
-#define ROBOT_ON_LINE_ERROR 10 //number of checks after line before we start checking if we passed line again,
+#define ROBOT_ON_LINE_ERROR 20 //number of checks after line before we start checking if we passed line again,
 
 // BALL RELEASE AND PICKUP CONSTANTS
 #define BALL_GRAB_FAN_PIN 38 //pin that controls the fan to suck up balls
 #define BALL_GRAB_FAN_CONST_PIN 40 //always keep this HIGH
-#define BALL_RELEASE_SERVO_PIN 50 //pin that controls the servo motor to release the ball
+#define BALL_RELEASE_SERVO_PIN 7 //pin that controls the servo motor to release the ball
 #define SERVO_VOLTAGE_PIN 48 // pin that supplies voltage to the servo
 #define BALL_SUCTION_ON_TIME 7000 //amount of time the vacuum sucks for when picking up a ball MILLISECONDS
 #define BALL_SUCTION_OFF_TIME 5000 //amount of time the robot delays for after turning off the fan MILLISECONDS
@@ -154,7 +154,7 @@ Need to Add List:
 #define BALL_RELEASE_POSITION_ERROR 1.7 //in cm if the robot is within this distance of the column it will stop to place a ball
 #define RELEASE_BALL_RESET_DELAY 2000 //delay time to reset the servo after placing a ball in MILLISECONDS, FOR TEST ONLY
 #define RELEASE_BALL_Y_VALUE 160 //y_robot for when the robot is aligned to the game board
-#define GAMEBOARD_INITIAL_X_ROBOT 6 //x line that the robot goes to when going to the gameboard
+#define GAMEBOARD_INITIAL_X_ROBOT 5 //x line that the robot goes to when going to the gameboard
 #define GAMEBOARD_INITIAL_Y_ROBOT 8 //y line that the robot goes to when going to the gameboard
 #define BALL_GRAB_TRIG_PIN 35 //trig pin for ball grabbing ultrasonic sensor
 #define BALL_GRAB_ECHO_PIN 37 //echo pin for ball grabbing ultrasonic sensor
@@ -166,7 +166,7 @@ Need to Add List:
 #define ZERO_MEASUREMENTS_IN_ROW 2 //need this many 0s in between hopper legs
 #define HOPPER_CENTER_LENGTH_X 13 //distance from leg to centre of hopper in x direction
 #define HOPPER_CENTER_LENGTH_Y 7 //distance from leg to centre of hopper in y direction
-#define HOP_ORIENT_SCAN_DIST_CORNER 46 //distance for the corner hoppers, from 1,2 is 34.5 or from 2, 2 46
+#define HOP_ORIENT_SCAN_DIST_CORNER 43.5 //distance for the corner hoppers, from 1,2 is 34.5 or from 2, 2 46
 
 //Scan gameboard
 #define ZERO_POSITION_IR_PIN A1 //the row 0 ir pin
@@ -365,7 +365,7 @@ void setup(){
   pick_up_game_ball();
   go_back_to_line_bot_right();
   stop_robot_motion();*/
-  //test_servo_fix();
+  //test_fan();
   //delay(5000000);
   main_setup();
 }
@@ -734,7 +734,8 @@ void robot_drive_til_line(int line, int direct){ //line is the line number to re
 }
 void robot_go_to_location(int final_x, int final_y){
   if (x_line_robot == GAMEFIELD_RED_LINE_NUM && y_line_robot == 1){ //start of game
-    robot_drive_horiz(GAMEFIELD_RED_LINE_NUM + 2);
+    if (next_hopper == 2) robot_drive_horiz(GAMEFIELD_RED_LINE_NUM - 2);
+    else robot_drive_horiz(GAMEFIELD_RED_LINE_NUM + 2);
     robot_drive_vertic(final_y);
     robot_drive_horiz(final_x);
   }
@@ -1527,7 +1528,7 @@ void align_to_hopper(){
     if (avg_dist > BALL_GRAB_PROPER_DISTANCE) start_robot_forward(); //too far away so go closer
     else start_robot_backward(); //too close so go backwards
   }  
-  delay(800);
+  delay(2000);
   stop_robot_motion();
   delay(STOP_MOTION_DELAY);
 }
@@ -1539,6 +1540,7 @@ void orient_on_hopper_error(int error){
 void pick_up_game_ball(){
   //fan_servo.write(BALL_RELEASE_SERVO_INITIAL_VAL);
   digitalWrite(BALL_GRAB_FAN_PIN, LOW); //low means the fan is sucking up the ball
+  fan_servo.write(BALL_RELEASE_SERVO_INITIAL_VAL);
   delay(BALL_SUCTION_ON_TIME);
   digitalWrite(BALL_GRAB_FAN_PIN, HIGH);
   delay(BALL_SUCTION_OFF_TIME);
@@ -1679,10 +1681,12 @@ int go_back_to_line_bot_left(){
     cur_time = micros();
     if (cur_time >= line_sensor_time) update_line_sensor_vals(cur_time);
   }
+  delay(100);
   while(mid_line_sensor_val == HIGH){ //skip the first vertical line we pass over
     if (cur_time >= line_sensor_time) update_line_sensor_vals(cur_time);
     cur_time = micros();
   }
+  delay(100);
   while(mid_line_sensor_val == LOW){ //wait til we reach the horizontal line
     if (cur_time >= line_sensor_time) update_line_sensor_vals(cur_time);
     cur_time = micros();
@@ -1730,11 +1734,16 @@ void place_game_ball(){
   left_wheel_speed = LEFT_WHEEL_GAMEBOARD_SPEED;
   right_wheel_speed = RIGHT_WHEEL_GAMEBOARD_SPEED;
   start_robot_forward();
-  while(abs(x_robot - DROP_BALL_X_OFFSET - column_locations[next_ball_column]) > BALL_RELEASE_POSITION_ERROR){
-    unsigned long cur_time = micros();
-    update_location(cur_time);
+  unsigned long cur_time = micros();
+  unsigned long goal_time = cur_time + 2000000;
+  //while(abs(x_robot - DROP_BALL_X_OFFSET - column_locations[next_ball_column]) > BALL_RELEASE_POSITION_ERROR && 0){
+  while (cur_time < goal_time){
+    cur_time = micros();
+    //update_location(cur_time);
     update_line_sensors();
   }
+  x_line_robot = 5;
+  x_robot = x_line_robot * LINE_SEP_DIST;
   stop_robot_motion();
   delay(STOP_MOTION_DELAY);
   release_ball();
@@ -1822,7 +1831,8 @@ int pre_board_scan2(){
 int pre_board_scan(){
   int error_check = game_strategy();
   place_game_ball();
-  x_line_robot = floor((x_robot) / LINE_SEP_DIST) + 1;
+  //x_line_robot = floor((x_robot) / LINE_SEP_DIST) + 1;
+  x_line_robot = 4;
   start_robot_straight_forward();
   robot_drive_til_line(1, 0);
 }
@@ -1881,13 +1891,14 @@ void release_ball(){
   //stop_robot_motion();
   //digitalWrite(SERVO_VOLTAGE_PIN, HIGH);
   //delay(300);
-  fan_servo.write(BALL_RELEASE_SERVO_FINAL_VAL);
   digitalWrite(BALL_GRAB_FAN_PIN, LOW); //low means the fan is sucking up the ball
-  delay(500);
-  digitalWrite(BALL_GRAB_FAN_PIN, HIGH);
+  delay(20);
   fan_servo.write(BALL_RELEASE_SERVO_FINAL_VAL);
-  delay(RELEASE_BALL_RESET_DELAY);
+  delay(350);
   fan_servo.write(BALL_RELEASE_SERVO_INITIAL_VAL);
+  delay(20);
+  digitalWrite(BALL_GRAB_FAN_PIN, HIGH);
+  //delay(RELEASE_BALL_RESET_DELAY);
   delay(100);
   //digitalWrite(SERVO_VOLTAGE_PIN, LOW);
   //delay(100);
@@ -1903,7 +1914,7 @@ void release_ball(){
 
 void test_fan(){
   pick_up_game_ball();
-  delay(2000);
+  delay(20000);
   release_ball();
   /*fan_servo.write(BALL_RELEASE_SERVO_FINAL_VAL);
   delay(2000);
@@ -1975,14 +1986,13 @@ void test_locomotion(){
 }
 
 void test_encoder(){
-  start_robot_straight_forward();
   unsigned long cur_time = micros();
   x_line_robot = 1;
   x_robot = 10;
   y_robot = 10;
   y_line_robot = 1;
   robot_orient = 0;
-  while(y_robot < 50){
+  while(y_robot < 40){
     update_location(cur_time);
     cur_time = micros();
   }
@@ -2075,7 +2085,7 @@ void increase_speeds(){
 }
 
 void test_servo_fix(){
-  for (int x = 0; x < 2; x++){
+  for (int x = 0; x < 20; x++){
     start_robot_straight_forward();
     delay(2000);
     stop_robot_motion();
